@@ -1,6 +1,6 @@
 # Overview
 
-This is a PDF data extraction and analysis application built with Flask that processes telecommunications billing PDFs to extract call logs, message history, and data usage information. The system provides a comprehensive dashboard with multiple tools for uploading, analyzing, visualizing, and note-taking on extracted data. It integrates with Google's Gemini AI for intelligent content generation and uses a SQLite database for data persistence.
+This is an AI-powered PDF data extraction and analysis application built with Flask that uses Google's Gemini AI to intelligently process telecommunications billing PDFs. The system extracts call logs, message history, and data usage information using advanced AI with JSON Schema validation. It features a mobile-style interface with navigation tabs, interactive data visualization, and an AI chat assistant that can answer questions about extracted data. The application uses SQLite for data persistence and provides comprehensive analysis tools.
 
 # User Preferences
 
@@ -10,19 +10,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Frontend Architecture
 
-The application uses a multi-page web interface built with:
-- **Bootstrap 5 with dark theme** for responsive UI components
+The application uses a single-page mobile-style interface built with:
+- **TailwindCSS** for modern, responsive UI design
 - **Vanilla JavaScript** for client-side interactions and API calls
-- **Chart.js** for data visualizations and charts
+- **Chart.js** for data visualizations (bar charts and pie charts)
 - **AG-Grid Community** for advanced data table functionality
-- **Feather Icons** for consistent iconography
+- **Lucide Icons** for consistent iconography
+- **PDF.js** for in-browser PDF preview and page selection
 
-The frontend is organized into four main sections:
-- Welcome page serving as a dashboard hub
-- Upload interface for PDF file processing
-- Data analyzer with interactive charts and tables
-- Notes application with AI integration
-- PDF viewer for document inspection
+The frontend is organized into five tab-based sections:
+- Upload tab for PDF file selection
+- Process tab with visual PDF page selector and AI extraction
+- Data tab with searchable/filterable grid view
+- Charts tab with interactive visualizations
+- Chat tab for AI-powered Q&A about extracted data
 
 ## Backend Architecture
 
@@ -31,45 +32,57 @@ The frontend is organized into four main sections:
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
 
-### Data Processing Pipeline
-The system implements a sophisticated PDF processing workflow:
+### AI-Powered Data Processing Pipeline
+The system implements an intelligent PDF processing workflow:
 
 1. **File Upload Handler**: Secures uploaded PDFs in the `data/raw` directory
-2. **Main Extractor**: Orchestrates the entire extraction process using `pdfplumber` for PDF text extraction
-3. **Specialized Extractors**: Three dedicated regex-based extractors for different data types:
-   - Call extractor for phone call records
-   - Message extractor for SMS/text message logs
-   - Data usage extractor for mobile internet consumption
-4. **Data Integrity Management**: Implements transaction-based processing with automatic rollback on errors
+2. **AI Processor Module**: Uses Google Gemini AI with JSON Schema validation for structured extraction
+3. **Intelligent Data Extraction**: AI analyzes PDF content and extracts:
+   - Call records with phone line, timestamp, direction, contact, and duration
+   - Message logs with sender/receiver information and format (TXT/PIC)
+   - Data usage records with line-specific consumption metrics
+4. **Chat Assistant**: AI-powered conversational interface for querying extracted data
+5. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
 
 ### Database Design
-Uses **SQLite** with SQLAlchemy ORM featuring three main entities:
-- `calls` table: Phone call records with timestamps, types, numbers, descriptions, and durations
-- `messages` table: Message logs with contact information, message types, and formats
-- `data_usage` table: Mobile internet usage records with consumption metrics
+Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
+- `extracted_data` table: Unified storage for all event types with fields:
+  - `phone_line`: The telephone line associated with the event
+  - `event_type`: Type of event (Llamada/Mensaje/Datos)
+  - `timestamp`: Date and time of the event
+  - `direction`: IN/OUT for calls and messages
+  - `contact`: Phone number or contact information
+  - `description`: Additional details about the event
+  - `value`: Numeric or text value (minutes, MB, format)
 
 The database includes source file tracking for data lineage and supports complete record replacement per source file to maintain data consistency.
 
 ### API Structure
 RESTful endpoints provide JSON data for the frontend:
-- `/api/data` - Complete dataset retrieval
-- `/api/summary` - Aggregated statistics and metrics
-- `/api/chronological` - Paginated timeline data with filtering
-- `/upload` - File processing endpoint
+- `/api/upload` - PDF file upload endpoint
+- `/api/process` - AI-powered data extraction endpoint
+- `/api/get-data` - Complete dataset retrieval
+- `/api/export-csv` - CSV export functionality
+- `/api/chat` - AI chat assistant endpoint for Q&A
 
 ## External Dependencies
 
 ### AI Integration
-- **Google Generative AI (Gemini 1.5 Flash)** for intelligent content generation in the notes application
+- **Google Generative AI (Gemini 1.5 Flash)** with multiple AI capabilities:
+  - Intelligent PDF data extraction using JSON Schema validation
+  - Context-aware chat assistant for data analysis
+  - Structured data extraction with Pydantic models
+- **google-genai SDK** for modern API integration
 - API key configured through environment variables (`GOOGLE_API_KEY`)
-- Error handling for API failures and missing configuration
+- Comprehensive error handling for API failures
 
 ### Python Libraries
 - **pdfplumber**: Advanced PDF text extraction with support for complex layouts
 - **SQLAlchemy**: Database ORM with declarative base for model definitions
 - **pandas**: Data manipulation and cleaning with DataFrame operations
 - **dateutil**: Flexible date parsing for various timestamp formats
-- **tqdm**: Progress indication during batch PDF processing
+- **google-genai**: Official Google AI SDK for Gemini models
+- **pydantic**: Data validation and JSON Schema generation for AI responses
 
 ### Frontend CDN Dependencies
 - Bootstrap 5 with Replit's dark theme customizations

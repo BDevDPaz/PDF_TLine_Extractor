@@ -4,7 +4,8 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from werkzeug.utils import secure_filename
 from app.db.database import init_db, SessionLocal
 from app.db.models import ExtractedData
-from app.data_extractor import process_pdf
+from app.ai_processor import extract_data_with_ai
+from app.ai_chat import get_chat_response
 
 # --- Configuración de la App ---
 app = Flask(__name__, template_folder='app/templates', static_folder='app/static')
@@ -50,27 +51,55 @@ def process_file():
     if not os.path.exists(filepath):
         return jsonify({'error': 'El archivo no existe en el servidor'}), 404
 
+    if not os.getenv("GOOGLE_API_KEY"): 
+        return jsonify({"error": "La API Key de Google no está configurada en los Secrets."}), 500
+    
     try:
-        record_count = process_pdf(filepath, pages)
+        record_count = extract_data_with_ai(filepath, pages)
         if record_count > 0:
-            return jsonify({'message': f'{record_count} registros extraídos y guardados con éxito.'})
+            return jsonify({'message': f'Éxito: La IA extrajo {record_count} registros.'})
         else:
-            return jsonify({'message': 'Proceso completado, pero no se encontraron datos válidos con los patrones actuales. Revisa app/config.py'}), 200
+            return jsonify({'message': 'La IA completó el proceso pero no encontró datos estructurados que extraer.'}), 200
     except Exception as e:
-        return jsonify({'error': f'Error durante el procesamiento: {str(e)}'}), 500
+        return jsonify({'error': f'Error en la IA: {str(e)}'}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat_handler():
+    if not os.getenv("GOOGLE_API_KEY"): 
+        return jsonify({"error": "La API Key de Google no está configurada en los Secrets."}), 500
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No se proporcionaron datos JSON'}), 400
+    
+    user_prompt = data.get('prompt')
+    history = data.get('history', [])
+    if not user_prompt:
+        return jsonify({'error': 'El prompt está vacío'}), 400
+    try:
+        response_text = get_chat_response(user_prompt, history)
+        return jsonify({'response': response_text})
+    except Exception as e:
+        return jsonify({'error': f'Error en la IA: {str(e)}'}), 500
 
 @app.route('/api/get-data', methods=['GET'])
 def get_data():
     db = SessionLocal()
     try:
         data = db.query(ExtractedData).all()
-        results = [
-            {
-                "id": item.id, "source_file": item.source_file, "event_type": item.event_type,
-                "timestamp": item.timestamp.isoformat(), "detail_1": item.detail_1, "detail_2": item.detail_2,
-                "detail_3": item.detail_3, "numeric_value": item.numeric_value
-            } for item in data
-        ]
+        results = []
+        for item in data:
+            result = {
+                "id": item.id, 
+                "source_file": item.source_file,
+                "phone_line": item.phone_line if hasattr(item, 'phone_line') else None,
+                "event_type": item.event_type,
+                "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "direction": item.direction if hasattr(item, 'direction') else None,
+                "contact": item.contact if hasattr(item, 'contact') else None,
+                "description": item.description if hasattr(item, 'description') else None,
+                "value": item.value if hasattr(item, 'value') else None
+            }
+            results.append(result)
         return jsonify(results)
     finally:
         db.close()

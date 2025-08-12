@@ -3,114 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador PDF Inteligente v4</title>
+    <title>Analizador PDF con IA v6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; } </style>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #e5e7eb; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .nav-btn.active { background-color: #2563eb; color: white; }
+        .chat-message { animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
 </head>
-<body>
-    <div class="container mx-auto p-4">
-        <header class="text-center py-6">
-            <h1 class="text-4xl font-bold text-gray-800">Analizador PDF Inteligente</h1>
-            <p class="text-lg text-gray-600">Sigue el flujo de trabajo: Cargar -> Visualizar y Seleccionar -> Procesar -> Analizar</p>
-        </header>
-
-        <!-- SECCIÓN 1: Carga de Archivo -->
-        <div id="upload-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="upload-cloud"></i>Paso 1: Cargar Archivo PDF</h2>
-            <input type="file" id="pdf-input" accept=".pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-            <div id="upload-status" class="mt-4"></div>
+<body class="bg-gray-100 flex flex-col min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-3">
+            <h1 class="text-2xl font-bold text-gray-800">📊 Analizador PDF con IA</h1>
+            <p class="text-sm text-gray-600">Extracción inteligente y chat con tus datos</p>
         </div>
+    </header>
 
-        <!-- SECCIÓN 2: Visualizador y Procesamiento -->
-        <div id="viewer-section" class="hidden bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="file-check-2"></i>Paso 2: Visualizar y Procesar</h2>
-            <div id="viewer-controls" class="flex justify-between items-center mb-4">
-                <button id="process-button" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:bg-gray-400">
-                    <i data-lucide="cog"></i> <span id="process-button-text">Procesar Páginas Seleccionadas</span>
-                </button>
-                <div id="process-status"></div>
-            </div>
-            <div id="pdf-viewer" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 border p-4 rounded-lg bg-gray-100">
-                <!-- Las páginas del PDF se renderizarán aquí -->
+    <!-- Main Content -->
+    <main class="flex-1 container mx-auto px-4 py-4 mb-20">
+        <!-- Tab 1: Upload -->
+        <div id="tab-upload" class="tab-content active">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i data-lucide="upload-cloud"></i> Cargar PDF
+                </h2>
+                <input type="file" id="pdf-input" accept=".pdf" 
+                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+                <div id="upload-status" class="mt-4"></div>
             </div>
         </div>
 
-        <!-- SECCIÓN 3: Análisis de Datos -->
-        <div id="analysis-section" class="hidden bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="bar-chart-3"></i>Paso 3: Analizar Datos</h2>
-            <div class="flex border-b mb-4">
-                <button id="tab-table" class="py-2 px-4 border-b-2 border-blue-500 font-semibold">Tabla de Datos</button>
-                <button id="tab-charts" class="py-2 px-4 text-gray-500">Análisis Visual</button>
-            </div>
-            
-            <div id="table-view">
-                <div class="flex gap-4 mb-4">
-                    <input type="text" id="quick-filter" placeholder="Búsqueda rápida..." class="w-full md:w-1/3 px-3 py-2 border rounded-md">
-                    <button id="export-csv" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700"><i data-lucide="download"></i>Exportar CSV</button>
+        <!-- Tab 2: Process -->
+        <div id="tab-process" class="tab-content">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i data-lucide="cpu"></i> Procesar con IA
+                </h2>
+                <div id="pdf-viewer" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+                    <!-- PDF pages will render here -->
                 </div>
-                <div id="data-grid" class="ag-theme-alpine" style="height: 600px; width: 100%;"></div>
-            </div>
-
-            <div id="charts-view" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <div class="h-96"><canvas id="callsChart"></canvas></div>
-                 <div class="h-96"><canvas id="dataUsageChart"></canvas></div>
+                <button id="process-button" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:bg-gray-400">
+                    <i data-lucide="sparkles"></i> Extraer con IA
+                </button>
+                <div id="process-status" class="mt-4"></div>
             </div>
         </div>
-    </div>
+
+        <!-- Tab 3: Data -->
+        <div id="tab-data" class="tab-content">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i data-lucide="table"></i> Datos Extraídos
+                </h2>
+                <div class="flex gap-4 mb-4">
+                    <input type="text" id="quick-filter" placeholder="Buscar..." 
+                        class="flex-1 px-3 py-2 border rounded-md">
+                    <button id="export-csv" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700">
+                        <i data-lucide="download"></i> CSV
+                    </button>
+                </div>
+                <div id="data-grid" class="ag-theme-alpine" style="height: 400px;"></div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Charts -->
+        <div id="tab-charts" class="tab-content">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3"></i> Visualizaciones
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="h-80"><canvas id="callsChart"></canvas></div>
+                    <div class="h-80"><canvas id="dataChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: Chat -->
+        <div id="tab-chat" class="tab-content">
+            <div class="bg-white rounded-lg shadow-md p-6 h-[600px] flex flex-col">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i data-lucide="message-circle"></i> Chat con IA
+                </h2>
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4">
+                    <div class="text-gray-500 text-center py-8">
+                        Haz preguntas sobre los datos extraídos
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="chat-input" placeholder="Escribe tu pregunta..." 
+                        class="flex-1 px-3 py-2 border rounded-md">
+                    <button id="chat-send" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+        <div class="flex justify-around">
+            <button class="nav-btn active flex-1 py-3 text-center" data-tab="upload">
+                <i data-lucide="upload" class="mx-auto mb-1"></i>
+                <span class="text-xs">Cargar</span>
+            </button>
+            <button class="nav-btn flex-1 py-3 text-center" data-tab="process">
+                <i data-lucide="cpu" class="mx-auto mb-1"></i>
+                <span class="text-xs">Procesar</span>
+            </button>
+            <button class="nav-btn flex-1 py-3 text-center" data-tab="data">
+                <i data-lucide="table" class="mx-auto mb-1"></i>
+                <span class="text-xs">Datos</span>
+            </button>
+            <button class="nav-btn flex-1 py-3 text-center" data-tab="charts">
+                <i data-lucide="bar-chart-3" class="mx-auto mb-1"></i>
+                <span class="text-xs">Gráficos</span>
+            </button>
+            <button class="nav-btn flex-1 py-3 text-center" data-tab="chat">
+                <i data-lucide="message-circle" class="mx-auto mb-1"></i>
+                <span class="text-xs">Chat</span>
+            </button>
+        </div>
+    </nav>
 
 <script>
-    // --- Configuración e Inicialización ---
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js`;
+    // Configuration
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
     let currentFilename = null;
     let gridApi;
+    let chatHistory = [];
 
-    const uploadInput = document.getElementById('pdf-input');
-    const uploadStatus = document.getElementById('upload-status');
-    const viewerSection = document.getElementById('viewer-section');
-    const pdfViewer = document.getElementById('pdf-viewer');
-    const processButton = document.getElementById('process-button');
-    const processStatus = document.getElementById('process-status');
-    const analysisSection = document.getElementById('analysis-section');
-    
-    // --- Lógica de la Interfaz ---
-    uploadInput.addEventListener('change', handleFileUpload);
-    processButton.addEventListener('click', handleProcess);
+    // Navigation
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    navButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
+            
+            // Update nav buttons
+            navButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update tab contents
+            tabContents.forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Load data when switching to data or charts tab
+            if (tabName === 'data' || tabName === 'charts') {
+                loadData();
+            }
+        });
+    });
+
+    // Upload functionality
+    document.getElementById('pdf-input').addEventListener('change', handleFileUpload);
+    document.getElementById('process-button').addEventListener('click', handleProcess);
     document.getElementById('export-csv').addEventListener('click', () => window.location.href = '/api/export-csv');
 
-    // Lógica de pestañas
-    const tabTable = document.getElementById('tab-table');
-    const tabCharts = document.getElementById('tab-charts');
-    const tableView = document.getElementById('table-view');
-    const chartsView = document.getElementById('charts-view');
-    
-    tabTable.addEventListener('click', () => {
-        tableView.classList.remove('hidden');
-        chartsView.classList.add('hidden');
-        tabTable.classList.add('border-blue-500', 'font-semibold');
-        tabCharts.classList.remove('border-blue-500', 'font-semibold');
-        tabCharts.classList.add('text-gray-500');
-        tabTable.classList.remove('text-gray-500');
-    });
-    tabCharts.addEventListener('click', () => {
-        tableView.classList.add('hidden');
-        chartsView.classList.remove('hidden');
-        tabTable.classList.remove('border-blue-500', 'font-semibold');
-        tabCharts.classList.add('border-blue-500', 'font-semibold');
-        tabCharts.classList.remove('text-gray-500');
-        tabTable.classList.add('text-gray-500');
-    });
-
-    // --- Funciones Principales ---
     async function handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        setStatus(uploadStatus, 'Subiendo...', 'loading');
+        setStatus('upload-status', 'Subiendo archivo...', 'loading');
         const formData = new FormData();
         formData.append('pdfFile', file);
 
@@ -119,58 +184,61 @@
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
             
-            setStatus(uploadStatus, `✅ ${result.message}. Ahora selecciona las páginas a procesar.`, 'success');
             currentFilename = result.filename;
-            viewerSection.classList.remove('hidden');
+            setStatus('upload-status', '✅ ' + result.message, 'success');
+            
+            // Switch to process tab
+            document.querySelector('[data-tab="process"]').click();
             renderPdf(result.filename);
         } catch (error) {
-            setStatus(uploadStatus, `❌ ${error.message}`, 'error');
+            setStatus('upload-status', '❌ ' + error.message, 'error');
         }
     }
 
     async function renderPdf(filename) {
-        pdfViewer.innerHTML = 'Cargando previsualización...';
+        const viewer = document.getElementById('pdf-viewer');
+        viewer.innerHTML = 'Cargando vista previa...';
+        
         const url = `/uploads/${filename}`;
         const loadingTask = pdfjsLib.getDocument(url);
         const pdf = await loadingTask.promise;
 
-        pdfViewer.innerHTML = '';
+        viewer.innerHTML = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 0.5 });
+            const viewport = page.getViewport({ scale: 0.3 });
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             canvas.height = viewport.height;
             canvas.width = viewport.width;
 
-            const renderContext = { canvasContext: context, viewport: viewport };
-            await page.render(renderContext).promise;
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
 
             const pageDiv = document.createElement('div');
-            pageDiv.className = 'border rounded-lg p-2 flex flex-col items-center gap-2';
+            pageDiv.className = 'border rounded-lg p-2 text-center';
             pageDiv.innerHTML = `
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked class="page-checkbox" data-page-num="${i}">
-                    Página ${i}
+                <label class="flex flex-col items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked class="page-checkbox" data-page="${i}">
+                    <span class="text-sm">Página ${i}</span>
                 </label>
             `;
             pageDiv.prepend(canvas);
-            pdfViewer.appendChild(pageDiv);
+            viewer.appendChild(pageDiv);
         }
     }
 
     async function handleProcess() {
         const selectedPages = Array.from(document.querySelectorAll('.page-checkbox:checked'))
-                                 .map(cb => parseInt(cb.dataset.pageNum));
+                                   .map(cb => parseInt(cb.dataset.page));
         
         if (selectedPages.length === 0) {
-            setStatus(processStatus, 'Selecciona al menos una página.', 'error');
+            setStatus('process-status', 'Selecciona al menos una página', 'error');
             return;
         }
 
-        setStatus(processStatus, 'Procesando...', 'loading');
-        document.getElementById('process-button-text').innerText = "Procesando...";
-        processButton.disabled = true;
+        const btn = document.getElementById('process-button');
+        btn.disabled = true;
+        setStatus('process-status', '🤖 La IA está analizando el documento...', 'loading');
 
         try {
             const response = await fetch('/api/process', {
@@ -179,91 +247,185 @@
                 body: JSON.stringify({ filename: currentFilename, pages: selectedPages })
             });
             const result = await response.json();
+            
             if (!response.ok) throw new Error(result.error);
-
-            setStatus(processStatus, `✅ ${result.message}`, 'success');
-            analysisSection.classList.remove('hidden');
-            loadDataIntoGrid();
+            
+            setStatus('process-status', '✅ ' + result.message, 'success');
+            
+            // Switch to data tab
+            setTimeout(() => {
+                document.querySelector('[data-tab="data"]').click();
+            }, 1500);
         } catch (error) {
-            setStatus(processStatus, `❌ ${error.message}`, 'error');
+            setStatus('process-status', '❌ ' + error.message, 'error');
         } finally {
-            document.getElementById('process-button-text').innerText = "Procesar Páginas Seleccionadas";
-            processButton.disabled = false;
+            btn.disabled = false;
         }
     }
 
+    // Data grid
     function initializeGrid() {
         const columnDefs = [
-            { field: "event_type", headerName: "Tipo", filter: true, width: 120 },
-            { field: "timestamp", headerName: "Fecha y Hora", sort: 'desc', width: 180 },
-            { field: "detail_1", headerName: "Detalle Principal", filter: true },
-            { field: "detail_2", headerName: "Detalle Secundario" },
-            { field: "detail_3", headerName: "Detalle Adicional" },
-            { field: "numeric_value", headerName: "Valor", filter: 'agNumberColumnFilter' },
-            { field: "source_file", headerName: "Archivo Origen", filter: true },
+            { field: "phone_line", headerName: "Línea", filter: true, width: 150 },
+            { field: "event_type", headerName: "Tipo", filter: true, width: 100 },
+            { field: "timestamp", headerName: "Fecha/Hora", sort: 'desc', width: 180 },
+            { field: "direction", headerName: "Dirección", width: 80 },
+            { field: "contact", headerName: "Contacto", filter: true },
+            { field: "description", headerName: "Descripción" },
+            { field: "value", headerName: "Valor", width: 100 }
         ];
+        
         const gridOptions = {
             columnDefs: columnDefs,
             defaultColDef: { sortable: true, resizable: true },
             onGridReady: (params) => { gridApi = params.api; }
         };
+        
         const gridDiv = document.getElementById('data-grid');
         agGrid.createGrid(gridDiv, gridOptions);
-        document.getElementById('quick-filter').addEventListener('input', (e) => gridApi.setQuickFilter(e.target.value));
-    }
-    
-    async function loadDataIntoGrid() {
-        if (!gridApi) initializeGrid();
-        const response = await fetch('/api/get-data');
-        const data = await response.json();
-        gridApi.setRowData(data);
-        renderCharts(data);
+        
+        document.getElementById('quick-filter').addEventListener('input', (e) => {
+            if (gridApi) gridApi.setQuickFilter(e.target.value);
+        });
     }
 
-    // --- Gráficos y Utilidades ---
-    let callsChart, dataUsageChart;
+    async function loadData() {
+        if (!gridApi) initializeGrid();
+        
+        try {
+            const response = await fetch('/api/get-data');
+            const data = await response.json();
+            gridApi.setRowData(data);
+            renderCharts(data);
+        } catch (error) {
+            console.error('Error loading data:', error);
+        }
+    }
+
+    // Charts
+    let callsChart, dataChart;
+    
     function renderCharts(data) {
-        // Lógica de Gráfico de Llamadas
+        // Calls chart
         const callsData = data.filter(d => d.event_type === 'Llamada');
-        const callsByNumber = callsData.reduce((acc, call) => {
-            acc[call.detail_1] = (acc[call.detail_1] || 0) + 1;
-            return acc;
-        }, {});
-        const sortedCalls = Object.entries(callsByNumber).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const callsByContact = {};
+        callsData.forEach(call => {
+            const contact = call.contact || 'Desconocido';
+            callsByContact[contact] = (callsByContact[contact] || 0) + 1;
+        });
+        
+        const sortedCalls = Object.entries(callsByContact)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
         
         if (callsChart) callsChart.destroy();
-        callsChart = createBarChart('callsChart', 'Top 10 Llamadas por Número', sortedCalls.map(c => c[0]), sortedCalls.map(c => c[1]), '#3b82f6');
-        
-        // Lógica de Gráfico de Uso de Datos
-        const dataUsage = data.filter(d => d.event_type === 'Datos');
-        const dataByDay = dataUsage.reduce((acc, item) => {
-            const day = new Date(item.timestamp).toLocaleDateString();
-            acc[day] = (acc[day] || 0) + item.numeric_value;
-            return acc;
-        }, {});
-
-        if (dataUsageChart) dataUsageChart.destroy();
-        dataUsageChart = createBarChart('dataUsageChart', 'Uso de Datos (MB) por Día', Object.keys(dataByDay), Object.values(dataByDay), '#16a34a');
-    }
-    
-    function createBarChart(canvasId, label, labels, data, color) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        return new Chart(ctx, {
+        const callsCtx = document.getElementById('callsChart').getContext('2d');
+        callsChart = new Chart(callsCtx, {
             type: 'bar',
-            data: { labels, datasets: [{ label, data, backgroundColor: color }] },
+            data: {
+                labels: sortedCalls.map(c => c[0]),
+                datasets: [{
+                    label: 'Top 10 Contactos (Llamadas)',
+                    data: sortedCalls.map(c => c[1]),
+                    backgroundColor: '#3b82f6'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+        
+        // Data usage chart
+        const dataUsage = data.filter(d => d.event_type === 'Datos');
+        const dataByLine = {};
+        dataUsage.forEach(item => {
+            const line = item.phone_line || 'Desconocido';
+            const mb = parseFloat(item.value) || 0;
+            dataByLine[line] = (dataByLine[line] || 0) + mb;
+        });
+        
+        if (dataChart) dataChart.destroy();
+        const dataCtx = document.getElementById('dataChart').getContext('2d');
+        dataChart = new Chart(dataCtx, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(dataByLine),
+                datasets: [{
+                    label: 'Uso de Datos por Línea (MB)',
+                    data: Object.values(dataByLine),
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+                }]
+            },
             options: { responsive: true, maintainAspectRatio: false }
         });
     }
 
-    function setStatus(element, message, type) {
+    // Chat functionality
+    document.getElementById('chat-send').addEventListener('click', sendMessage);
+    document.getElementById('chat-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    async function sendMessage() {
+        const input = document.getElementById('chat-input');
+        const message = input.value.trim();
+        if (!message) return;
+        
+        // Add user message to chat
+        addChatMessage(message, 'user');
+        input.value = '';
+        
+        // Add to history
+        chatHistory.push({ role: 'user', parts: [message] });
+        
+        // Send to API
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt: message, history: chatHistory })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) throw new Error(result.error);
+            
+            // Add AI response to chat
+            addChatMessage(result.response, 'ai');
+            
+            // Add to history
+            chatHistory.push({ role: 'model', parts: [result.response] });
+        } catch (error) {
+            addChatMessage('Error: ' + error.message, 'error');
+        }
+    }
+
+    function addChatMessage(message, sender) {
+        const messagesDiv = document.getElementById('chat-messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message mb-3 ${sender === 'user' ? 'text-right' : ''}`;
+        
+        const bubble = document.createElement('div');
+        bubble.className = `inline-block max-w-[80%] px-4 py-2 rounded-lg ${
+            sender === 'user' ? 'bg-blue-600 text-white' : 
+            sender === 'error' ? 'bg-red-100 text-red-700' : 
+            'bg-gray-200 text-gray-800'
+        }`;
+        bubble.textContent = message;
+        
+        messageDiv.appendChild(bubble);
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function setStatus(elementId, message, type) {
+        const element = document.getElementById(elementId);
         element.innerHTML = message;
         element.className = 'mt-2 text-sm ';
         if (type === 'success') element.classList.add('text-green-600');
         else if (type === 'error') element.classList.add('text-red-600');
         else if (type === 'loading') element.classList.add('text-blue-600');
     }
-    
-    // --- Inicialización al Cargar la Página ---
+
+    // Initialize
     lucide.createIcons();
     initializeGrid();
 </script>
