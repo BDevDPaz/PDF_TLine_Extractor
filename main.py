@@ -6,6 +6,7 @@ from app.db.database import init_db, SessionLocal
 from app.db.models import ExtractedData
 from app.optimized_processor import extract_data_with_optimized_processing
 from app.ai_chat import get_chat_response
+from app.chat_file_handler import process_chat_file_upload, export_chat_history
 
 # --- Configuración de la App ---
 app = Flask(__name__, template_folder='app/templates', static_folder='app/static')
@@ -124,5 +125,57 @@ def export_csv():
     finally:
         db.close()
 
+@app.route('/api/chat-file', methods=['POST'])
+def chat_file_handler():
+    """Maneja archivos PDF subidos directamente al chat"""
+    if 'file' not in request.files or 'question' not in request.form:
+        return jsonify({'error': 'Falta archivo o pregunta'}), 400
+    
+    file = request.files['file']
+    question = request.form['question']
+    
+    if file.filename == '' or not question.strip():
+        return jsonify({'error': 'Archivo vacío o pregunta vacía'}), 400
+    
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({'error': 'Solo se permiten archivos PDF'}), 400
+    
+    try:
+        # Guardar archivo temporalmente
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{filename}")
+        file.save(temp_path)
+        
+        # Procesar con IA
+        response = process_chat_file_upload(temp_path, question)
+        
+        # Limpiar archivo temporal
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        return jsonify({'response': response})
+    except Exception as e:
+        return jsonify({'error': f'Error procesando archivo: {str(e)}'}), 500
+
+@app.route('/api/export-chat', methods=['POST'])
+def export_chat_history_endpoint():
+    """Exporta el historial de chat"""
+    data = request.get_json()
+    if not data or 'history' not in data:
+        return jsonify({'error': 'No se proporcionó historial'}), 400
+    
+    try:
+        chat_text = export_chat_history(data['history'])
+        
+        # Crear respuesta como archivo descargable
+        response = Response(
+            chat_text,
+            mimetype='text/plain',
+            headers={'Content-Disposition': 'attachment; filename=historial_chat.txt'}
+        )
+        return response
+    except Exception as e:
+        return jsonify({'error': f'Error exportando chat: {str(e)}'}), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)

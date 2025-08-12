@@ -128,13 +128,33 @@ Contenido completo de la factura:
         response = model.generate_content(prompt)
         response_text = response.text.strip()
         
-        # Limpiar respuesta
+        # Limpiar respuesta de forma más robusta
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
         elif '```' in response_text:
             response_text = response_text.split('```')[1].strip()
         
-        extracted_data = json.loads(response_text)
+        # Limpiar caracteres no JSON
+        response_text = response_text.strip()
+        if not response_text.startswith('{'):
+            # Buscar el primer { que marque el inicio del JSON
+            start = response_text.find('{')
+            if start != -1:
+                response_text = response_text[start:]
+        
+        if not response_text.endswith('}'):
+            # Buscar el último } que marque el final del JSON
+            end = response_text.rfind('}')
+            if end != -1:
+                response_text = response_text[:end+1]
+        
+        try:
+            extracted_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            print(f"Error de JSON: {e}")
+            print(f"Texto recibido: {response_text[:200]}...")
+            # Si no es JSON válido, devolver estructura vacía para que use fallback
+            extracted_data = {"calls": [], "messages": [], "data_usage": []}
         
         # Convertir a objetos de base de datos
         records = []
