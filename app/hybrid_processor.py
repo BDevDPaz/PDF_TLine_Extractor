@@ -97,13 +97,7 @@ Texto:
     
     try:
         # Configuración con timeout muy agresivo
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=3000,  # Límite bajo para respuestas rápidas
-            )
-        )
+        response = model.generate_content(prompt)
         
         response_text = response.text.strip()
         
