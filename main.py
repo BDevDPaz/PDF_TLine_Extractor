@@ -93,7 +93,7 @@ def get_data():
                 "source_file": item.source_file,
                 "phone_line": item.phone_line if hasattr(item, 'phone_line') else None,
                 "event_type": item.event_type,
-                "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "timestamp": item.timestamp.isoformat() if item.timestamp is not None else None,
                 "direction": item.direction if hasattr(item, 'direction') else None,
                 "contact": item.contact if hasattr(item, 'contact') else None,
                 "description": item.description if hasattr(item, 'description') else None,

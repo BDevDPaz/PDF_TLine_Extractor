@@ -1,94 +1,213 @@
 import os
 import pdfplumber
-from typing import List, Optional
-from pydantic import BaseModel, Field
-from google import genai
+import json
+import re
+from datetime import datetime
+from dateutil.parser import parse
+import google.generativeai as genai
 from app.db.database import SessionLocal
 from app.db.models import ExtractedData
 
-# --- Definir la Plantilla/Esquema de Datos con Pydantic ---
-class CallRecord(BaseModel):
-    phone_line: str = Field(description="La línea telefónica que realizó o recibió la llamada, ej: (818) 466-3558")
-    timestamp_str: str = Field(description="La fecha y hora de la llamada, ej: 'Jun 16 6:16 PM'")
-    direction: str = Field(description="La dirección de la llamada, 'IN' o 'OUT'")
-    contact_number: str = Field(description="El número de teléfono al que se llamó o del que se recibió la llamada")
-    description: str = Field(description="El destino o descripción de la llamada, ej: to Canogapark/CA")
-    minutes: int = Field(description="La duración de la llamada en minutos")
-
-class MessageRecord(BaseModel):
-    phone_line: str = Field(description="La línea telefónica que envió o recibió el mensaje")
-    timestamp_str: str = Field(description="La fecha y hora del mensaje, ej: 'Jun 16 4:27 PM'")
-    direction: str = Field(description="La dirección del mensaje, 'IN' o 'OUT'")
-    contact: str = Field(description="El número o contacto del mensaje")
-    format: str = Field(description="El formato del mensaje, 'TXT' o 'PIC'")
-
-class DataUsageRecord(BaseModel):
-    phone_line: str = Field(description="La línea telefónica que usó los datos")
-    date_str: str = Field(description="La fecha del uso de datos, ej: 'Jun 16'")
-    megabytes_used: float = Field(description="La cantidad de datos usados en MB, ej: 2517.5465")
-
-class BillingData(BaseModel):
-    calls: List[CallRecord]
-    messages: List[MessageRecord]
-    data_usage: List[DataUsageRecord]
-
-# --- Función de Extracción con IA ---
 def extract_data_with_ai(filepath: str, pages_to_process: list[int]):
-    from dateutil.parser import parse
-
+    # Configurar la API de Google
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel(model_name='gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
     filename = os.path.basename(filepath)
     full_text = ""
+    
+    # Extraer texto del PDF
     with pdfplumber.open(filepath) as pdf:
         for page_num in pages_to_process:
-            if page_num > len(pdf.pages): continue
+            if page_num > len(pdf.pages): 
+                continue
             page = pdf.pages[page_num - 1]
             text = page.extract_text()
-            if text: full_text += f"\n--- Contenido de Página {page_num} ---\n{text}"
+            if text: 
+                full_text += f"\n--- Página {page_num} ---\n{text}"
 
-    if not full_text: return 0
+    if not full_text: 
+        return 0
 
-    prompt = f"Analiza el siguiente texto de una factura de T-Mobile y extrae TODAS las llamadas (TALK), mensajes (TEXT) y registros de uso de datos (DATA). Presta especial atención a qué línea telefónica pertenece cada registro. Formatea tu respuesta estrictamente como un objeto JSON que siga el esquema proporcionado. Texto de la factura:\n\n{full_text}"
-    
-    response = model.generate_content(
-        contents=prompt,
-        generation_config={
-            "response_mime_type": "application/json",
-            "response_schema": BillingData.model_json_schema()
-        }
-    )
-    
-    extracted = BillingData.model_validate_json(response.text)
-    
+    # Prompt para la IA
+    prompt = f"""
+Analiza el siguiente texto de una factura de telecomunicaciones y extrae TODOS los registros de:
+
+1. LLAMADAS (TALK): busca líneas con fechas, horas, direcciones (IN/OUT), números de teléfono y duración en minutos
+2. MENSAJES (TEXT): busca líneas con fechas, horas, direcciones (IN/OUT), contactos y formato (TXT/PIC)
+3. DATOS (DATA): busca registros de uso de datos con fechas y megabytes usados
+
+Responde SOLO con un JSON válido en este formato exacto:
+{{
+  "calls": [
+    {{
+      "phone_line": "(555) 123-4567",
+      "date": "Jun 16", 
+      "time": "6:16 PM",
+      "direction": "OUT",
+      "contact": "(818) 466-3558", 
+      "description": "to Canogapark/CA",
+      "minutes": 15
+    }}
+  ],
+  "messages": [
+    {{
+      "phone_line": "(555) 123-4567",
+      "date": "Jun 16",
+      "time": "4:27 PM", 
+      "direction": "OUT",
+      "contact": "96831",
+      "format": "TXT"
+    }}
+  ],
+  "data_usage": [
+    {{
+      "phone_line": "(555) 123-4567",
+      "date": "Jun 16",
+      "megabytes": 2517.55
+    }}
+  ]
+}}
+
+Texto de la factura:
+{full_text}
+"""
+
+    try:
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        
+        # Limpiar el texto de respuesta para obtener solo el JSON
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            response_text = response_text.split('```')[1].strip()
+        
+        # Parsear JSON
+        try:
+            extracted_data = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Si no es JSON válido, intentar extraer con regex básico
+            return extract_with_fallback_regex(full_text, filename)
+        
+        # Procesar los datos extraídos
+        all_records = []
+        current_year = "2024"
+        
+        # Procesar llamadas
+        for call in extracted_data.get('calls', []):
+            try:
+                date_str = f"{call['date']} {call['time']}, {current_year}"
+                timestamp = parse(date_str)
+                all_records.append(ExtractedData(
+                    source_file=filename,
+                    phone_line=call.get('phone_line', 'N/A'),
+                    event_type='Llamada',
+                    timestamp=timestamp,
+                    direction=call.get('direction'),
+                    contact=call.get('contact'),
+                    description=call.get('description', ''),
+                    value=f"{call.get('minutes', 0)} min"
+                ))
+            except Exception:
+                continue
+        
+        # Procesar mensajes
+        for msg in extracted_data.get('messages', []):
+            try:
+                date_str = f"{msg['date']} {msg['time']}, {current_year}"
+                timestamp = parse(date_str)
+                all_records.append(ExtractedData(
+                    source_file=filename,
+                    phone_line=msg.get('phone_line', 'N/A'),
+                    event_type='Mensaje',
+                    timestamp=timestamp,
+                    direction=msg.get('direction'),
+                    contact=msg.get('contact'),
+                    description='',
+                    value=msg.get('format', 'TXT')
+                ))
+            except Exception:
+                continue
+        
+        # Procesar uso de datos
+        for data in extracted_data.get('data_usage', []):
+            try:
+                date_str = f"{data['date']}, {current_year}"
+                timestamp = parse(date_str)
+                all_records.append(ExtractedData(
+                    source_file=filename,
+                    phone_line=data.get('phone_line', 'N/A'),
+                    event_type='Datos',
+                    timestamp=timestamp,
+                    direction=None,
+                    contact=None,
+                    description='Uso de datos',
+                    value=f"{data.get('megabytes', 0):.2f} MB"
+                ))
+            except Exception:
+                continue
+        
+        # Guardar en la base de datos
+        db = SessionLocal()
+        try:
+            # Eliminar registros anteriores de este archivo
+            db.query(ExtractedData).filter(ExtractedData.source_file == filename).delete()
+            
+            # Insertar nuevos registros
+            for record in all_records:
+                db.add(record)
+            
+            db.commit()
+            return len(all_records)
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"Error in AI processing: {e}")
+        return extract_with_fallback_regex(full_text, filename)
+
+def extract_with_fallback_regex(text: str, filename: str):
+    """Extracción de respaldo usando regex básico"""
     all_records = []
     current_year = "2024"
-
-    for call in extracted.calls:
-        all_records.append(ExtractedData(
-            source_file=filename, phone_line=call.phone_line, event_type='Llamada',
-            timestamp=parse(f"{call.timestamp_str}, {current_year}"), direction=call.direction,
-            contact=call.contact_number, description=call.description, value=f"{call.minutes} min"
-        ))
-    for msg in extracted.messages:
-         all_records.append(ExtractedData(
-            source_file=filename, phone_line=msg.phone_line, event_type='Mensaje',
-            timestamp=parse(f"{msg.timestamp_str}, {current_year}"), direction=msg.direction,
-            contact=msg.contact, description=None, value=msg.format
-        ))
-    for data in extracted.data_usage:
-         all_records.append(ExtractedData(
-            source_file=filename, phone_line=data.phone_line, event_type='Datos',
-            timestamp=parse(f"{data.date_str}, {current_year}"), direction=None,
-            contact=None, description="Uso de datos", value=f"{data.megabytes_used:.2f} MB"
-        ))
-
-    db = SessionLocal()
-    try:
-        db.query(ExtractedData).filter(ExtractedData.source_file == filename).delete()
-        db.add_all(all_records)
-        db.commit()
-        return len(all_records)
-    finally:
-        db.close()
+    
+    # Patrones regex básicos
+    call_pattern = re.compile(
+        r"(\w{3})\s+(\d{1,2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+(IN|OUT)\s+([^\\n\\r]+?)\s+(\d+)",
+        re.MULTILINE
+    )
+    
+    for match in call_pattern.finditer(text):
+        try:
+            month, day, time, direction, contact_desc, minutes = match.groups()
+            date_str = f"{month} {day}, {current_year} {time}"
+            timestamp = parse(date_str)
+            
+            record = ExtractedData(
+                source_file=filename,
+                phone_line="N/A",
+                event_type='Llamada',
+                timestamp=timestamp,
+                direction=direction,
+                contact=contact_desc.split()[0] if contact_desc else 'Unknown',
+                description=contact_desc,
+                value=f"{minutes} min"
+            )
+            all_records.append(record)
+        except Exception:
+            continue
+    
+    # Guardar registros de respaldo
+    if all_records:
+        db = SessionLocal()
+        try:
+            db.query(ExtractedData).filter(ExtractedData.source_file == filename).delete()
+            for record in all_records:
+                db.add(record)
+            db.commit()
+            return len(all_records)
+        finally:
+            db.close()
+    
+    return 0

@@ -72,7 +72,7 @@ RESTful endpoints provide JSON data for the frontend:
   - Intelligent PDF data extraction using JSON Schema validation
   - Context-aware chat assistant for data analysis
   - Structured data extraction with Pydantic models
-- **google-genai SDK** for modern API integration
+- **google-generativeai SDK** for reliable API integration
 - API key configured through environment variables (`GOOGLE_API_KEY`)
 - Comprehensive error handling for API failures
 
@@ -81,7 +81,7 @@ RESTful endpoints provide JSON data for the frontend:
 - **SQLAlchemy**: Database ORM with declarative base for model definitions
 - **pandas**: Data manipulation and cleaning with DataFrame operations
 - **dateutil**: Flexible date parsing for various timestamp formats
-- **google-genai**: Official Google AI SDK for Gemini models
+- **google-generativeai**: Official Google Generative AI SDK for Gemini models
 - **pydantic**: Data validation and JSON Schema generation for AI responses
 
 ### Frontend CDN Dependencies
