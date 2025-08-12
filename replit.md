@@ -32,17 +32,18 @@ The frontend is organized into five tab-based sections:
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
 
-### AI-Powered Data Processing Pipeline
-The system implements an intelligent PDF processing workflow:
+### Hybrid AI-Powered Data Processing Pipeline
+The system implements a robust hybrid PDF processing workflow:
 
-1. **File Upload Handler**: Secures uploaded PDFs in the `data/raw` directory
-2. **AI Processor Module**: Uses Google Gemini AI with JSON Schema validation for structured extraction
-3. **Intelligent Data Extraction**: AI analyzes PDF content and extracts:
-   - Call records with phone line, timestamp, direction, contact, and duration
-   - Message logs with sender/receiver information and format (TXT/PIC)
-   - Data usage records with line-specific consumption metrics
+1. **File Upload Handler**: Secures uploaded PDFs in the `data` directory
+2. **Hybrid Processor Module**: Uses Google Gemini AI with regex fallback for maximum reliability
+3. **Intelligent Data Extraction**: 
+   - Primary: AI analyzes PDF content in optimized chunks to avoid timeouts
+   - Fallback: Advanced regex patterns for reliable extraction when AI fails
+   - Extracts call records, message logs, and data usage with timestamps
 4. **Chat Assistant**: AI-powered conversational interface for querying extracted data
 5. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
+6. **Timeout Protection**: Chunked processing and strict limits prevent worker crashes
 
 ### Database Design
 Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
@@ -72,7 +73,7 @@ RESTful endpoints provide JSON data for the frontend:
   - Intelligent PDF data extraction using JSON Schema validation
   - Context-aware chat assistant for data analysis
   - Structured data extraction with Pydantic models
-- **google-generativeai SDK** for reliable API integration
+- **google-generativeai SDK** with hybrid approach: AI + regex fallback for maximum reliability
 - API key configured through environment variables (`GOOGLE_API_KEY`)
 - Comprehensive error handling for API failures
 
