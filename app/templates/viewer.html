@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de PDF</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i data-feather="home" class="me-2"></i>
+                Analizador PDF
+            </a>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i data-feather="file-text" class="me-2"></i>
+                            Visor de PDF
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="pdfFile" class="form-label">Seleccionar archivo PDF</label>
+                                    <input type="file" class="form-control" id="pdfFile" accept=".pdf">
+                                </div>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <button class="btn btn-primary" id="loadPdfBtn" disabled>
+                                    <i data-feather="eye" class="me-2"></i>
+                                    Ver PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="pdfViewer" class="mt-4">
+                            <div class="text-center text-muted py-5">
+                                <i data-feather="upload" style="width: 48px; height: 48px;" class="mb-3"></i>
+                                <p>Selecciona un archivo PDF para visualizarlo aquí</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js"></script>
+    <script>
+        feather.replace();
+
+        const pdfFileInput = document.getElementById('pdfFile');
+        const loadPdfBtn = document.getElementById('loadPdfBtn');
+        const pdfViewer = document.getElementById('pdfViewer');
+
+        pdfFileInput.addEventListener('change', function() {
+            loadPdfBtn.disabled = !this.files.length;
+        });
+
+        loadPdfBtn.addEventListener('click', function() {
+            const file = pdfFileInput.files[0];
+            if (!file) return;
+
+            const fileURL = URL.createObjectURL(file);
+            
+            pdfViewer.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Visualizando: ${file.name}</h6>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="downloadPdf('${file.name}')">
+                            <i data-feather="download" class="me-1"></i>
+                            Descargar
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm ms-2" onclick="closePdf()">
+                            <i data-feather="x" class="me-1"></i>
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+                <div class="border rounded" style="height: 600px;">
+                    <iframe src="${fileURL}" width="100%" height="100%" 
+                            style="border: none; border-radius: 0.375rem;"></iframe>
+                </div>
+            `;
+            
+            // Re-initialize feather icons for new elements
+            feather.replace();
+        });
+
+        function downloadPdf(filename) {
+            const file = pdfFileInput.files[0];
+            if (!file) return;
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(file);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function closePdf() {
+            pdfViewer.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i data-feather="upload" style="width: 48px; height: 48px;" class="mb-3"></i>
+                    <p>Selecciona un archivo PDF para visualizarlo aquí</p>
+                </div>
+            `;
+            feather.replace();
+        }
+    </script>
+</body>
+</html>
