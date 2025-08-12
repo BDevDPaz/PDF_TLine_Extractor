@@ -1,0 +1,617 @@
+#!/bin/bash
+# Script Completo de Creación de Aplicación (v5) - Versión Definitiva
+# UI rediseñada con navegación inferior, flujo lógico y patrones de extracción personalizados para T-Mobile.
+
+echo "Iniciando la construcción de la aplicación definitiva (v5)..."
+echo "------------------------------------------------------------------"
+
+# --- 1. Estructura de Directorios ---
+echo "PASO 1: Creando estructura de directorios..."
+mkdir -p app/db app/static/js app/templates data/raw
+echo "✅ Estructura de directorios creada."
+echo ""
+
+# --- 2. Archivos de Configuración y Documentación ---
+echo "PASO 2: Creando archivos de configuración y README..."
+
+# ARCHIVO DE CONFIGURACIÓN CON PATRONES PARA T-MOBILE
+cat > app/config.py << 'EOF'
+# app/config.py
+# Patrones de REGEX personalizados para facturas de T-Mobile (basado en los PDFs proporcionados).
+
+import re
+
+# Patrón para identificar la línea telefónica a la que pertenecen los datos.
+# Busca algo como: (747) 240-1916 Jun 16 - Jun 16
+PHONE_LINE_HEADER_PATTERN = re.compile(r"^\((\d{3})\)\s(\d{3}-\d{4})\s+(.+)$", re.MULTILINE)
+
+# Patrón para TALK (Llamadas)
+# Ejemplo: Jun 16 6:16 PM OUT (818) 466-3558 to Canogapark/CA F 1 $0.00
+CALL_PATTERN = re.compile(
+    r"^(\w{3})\s+(\d{1,2})\s+"          # Grupo 1, 2: Mes y Día ("Jun 16")
+    r"(\d{1,2}:\d{2}\s*(?:AM|PM))\s+"  # Grupo 3: Hora ("6:16 PM")
+    r"(IN|OUT)\s+"                     # Grupo 4: Tipo ("OUT")
+    r"(\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{4}|\d{5,11})\s+" # Grupo 5: Número, con o sin paréntesis/guiones, o corto
+    r"(.*?)\s+"                        # Grupo 6: Descripción (perezoso para no capturar de más)
+    r"([A-Z])\s+"                      # Grupo 7: Código de tipo ("F")
+    r"(\d+)",                          # Grupo 8: Minutos ("1")
+    re.MULTILINE
+)
+
+# Patrón para TEXT (Mensajes)
+# Ejemplo: Jun 16 4:27 PM OUT 9 6831 Canogapark, CA TXT -
+MESSAGE_PATTERN = re.compile(
+    r"^(\w{3})\s+(\d{1,2})\s+"          # Grupo 1, 2: Mes y Día ("Jun 16")
+    r"(\d{1,2}:\d{2}\s*(?:AM|PM))\s+"  # Grupo 3: Hora ("4:27 PM")
+    r"(IN|OUT)\s+"                     # Grupo 4: Tipo ("OUT")
+    r"(\S+)\s+"                        # Grupo 5: Número/Contacto (cualquier cosa sin espacios)
+    r"(.*?)\s+"                        # Grupo 6: Destino (puede tener espacios)
+    r"(TXT|PIC)",                      # Grupo 7: Formato ("TXT")
+    re.MULTILINE
+)
+
+# Patrón para DATA (Uso de Datos)
+# Ejemplo: Jun 16 Mobile Internet - 2,517.5465 -
+DATA_USAGE_PATTERN = re.compile(
+    r"^(\w{3})\s+(\d{1,2})\s+"          # Grupo 1, 2: Mes y Día ("Jun 16")
+    r"(Mobile Internet|Web Access)\s+.*?\s+" # Servicio (ignora el origen)
+    r"([\d,]+\.\d+)",                  # Grupo 3: MB Usados
+    re.MULTILINE
+)
+EOF
+echo "  -> config.py con patrones de T-Mobile creado."
+
+cat > .replit << 'EOF'
+run = "poetry install && python main.py"
+language = "python3"
+[packager]
+language = "python3"
+[packager.features]
+packageSearch = true
+guessImports = true
+EOF
+echo "  -> .replit creado."
+
+cat > pyproject.toml << 'EOF'
+[tool.poetry]
+name = "pdf-analyzer-app-v5"
+version = "5.0.0"
+description = "Aplicación web final con UI de app móvil y extracción de datos precisa."
+authors = ["Coding Partner"]
+[tool.poetry.dependencies]
+python = ">=3.8"
+Flask = "^2.2.0"
+SQLAlchemy = "^1.4.0"
+pdfplumber = "^0.10.0"
+pandas = "^1.5.0"
+python-dateutil = "^2.8.0"
+werkzeug = "^2.2.0"
+[tool.poetry.dev-dependencies]
+pytest = "^7.0"
+black = "^23.0"
+EOF
+echo "  -> pyproject.toml creado."
+echo "✅ Archivos de configuración creados."
+echo ""
+
+# --- 3. Aplicación Python Final ---
+echo "PASO 3: Creando la aplicación Python final..."
+touch app/__init__.py app/db/__init__.py app/static/js/__init__.py
+
+# Módulos de la base de datos
+cat > app/db/database.py << 'EOF'
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+DATABASE_URL = "sqlite:///data/app_data.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+def init_db(): Base.metadata.create_all(bind=engine)
+EOF
+echo "  -> db/database.py creado."
+
+cat > app/db/models.py << 'EOF'
+from sqlalchemy import Column, Integer, String, DateTime, Float
+from app.db.database import Base
+class ExtractedData(Base):
+    __tablename__ = "extracted_data"
+    id = Column(Integer, primary_key=True, index=True)
+    source_file = Column(String, index=True)
+    phone_line = Column(String, index=True) # La línea que generó el evento
+    event_type = Column(String, index=True) # 'Llamada', 'Mensaje', 'Datos'
+    timestamp = Column(DateTime, index=True)
+    direction = Column(String) # 'IN', 'OUT'
+    contact = Column(String) # Número/Contacto
+    description = Column(String)
+    value = Column(String) # Minutos, Formato (TXT/PIC), MB
+EOF
+echo "  -> db/models.py creado."
+
+# Lógica de extracción principal
+cat > app/data_extractor.py << 'EOF'
+import pdfplumber
+from dateutil.parser import parse
+import os
+from app.config import PHONE_LINE_HEADER_PATTERN, CALL_PATTERN, MESSAGE_PATTERN, DATA_USAGE_PATTERN
+from app.db.database import SessionLocal
+from app.db.models import ExtractedData
+
+def process_pdf(filepath: str, pages_to_process: list[int]):
+    all_records = []
+    filename = os.path.basename(filepath)
+    current_year = "2024"
+    current_phone_line = "N/A"
+
+    with pdfplumber.open(filepath) as pdf:
+        for page_num in pages_to_process:
+            if page_num > len(pdf.pages): continue
+            page = pdf.pages[page_num - 1]
+            text = page.extract_text()
+            if not text: continue
+
+            lines = text.split('\n')
+            for line in lines:
+                # Detectar si estamos en una nueva sección de línea telefónica
+                header_match = PHONE_LINE_HEADER_PATTERN.match(line)
+                if header_match:
+                    current_phone_line = f"({header_match.group(1)}) {header_match.group(2)}"
+                    continue
+
+                # Intentar hacer match con los patrones de datos
+                call_match = CALL_PATTERN.match(line)
+                if call_match:
+                    month, day, time, direction, contact, desc, _, minutes = call_match.groups()
+                    try:
+                        date_str = f"{month} {day}, {current_year} {time}"
+                        all_records.append({
+                            "source_file": filename, "phone_line": current_phone_line, "event_type": "Llamada",
+                            "timestamp": parse(date_str), "direction": direction, "contact": contact.strip(),
+                            "description": desc.strip(), "value": f"{minutes} min"
+                        })
+                    except: continue
+
+                msg_match = MESSAGE_PATTERN.match(line)
+                if msg_match:
+                    month, day, time, direction, contact, dest, fmt = msg_match.groups()
+                    try:
+                        date_str = f"{month} {day}, {current_year} {time}"
+                        all_records.append({
+                            "source_file": filename, "phone_line": current_phone_line, "event_type": "Mensaje",
+                            "timestamp": parse(date_str), "direction": direction, "contact": contact.strip(),
+                            "description": dest.strip(), "value": fmt
+                        })
+                    except: continue
+
+                data_match = DATA_USAGE_PATTERN.match(line)
+                if data_match:
+                    month, day, service, mb_used = data_match.groups()
+                    try:
+                        date_str = f"{month} {day}, {current_year}"
+                        all_records.append({
+                            "source_file": filename, "phone_line": current_phone_line, "event_type": "Datos",
+                            "timestamp": parse(date_str), "direction": None, "contact": None,
+                            "description": service, "value": f"{mb_used} MB"
+                        })
+                    except: continue
+    
+    # Guardar en DB
+    if not all_records: return 0
+    
+    db = SessionLocal()
+    try:
+        db.query(ExtractedData).filter(ExtractedData.source_file == filename).delete()
+        for record in all_records:
+            db.add(ExtractedData(**record))
+        db.commit()
+        return len(all_records)
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+EOF
+echo "  -> data_extractor.py creado."
+
+# Controlador principal
+cat > main.py << 'EOF'
+import os
+import pandas as pd
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response
+from werkzeug.utils import secure_filename
+from app.db.database import init_db, SessionLocal
+from app.db.models import ExtractedData
+from app.data_extractor import process_pdf
+
+app = Flask(__name__, template_folder='app/templates', static_folder='app/static')
+app.config['UPLOAD_FOLDER'] = 'data/raw'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+init_db()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    if 'pdfFile' not in request.files: return jsonify({'error': 'No se encontró el archivo'}), 400
+    file = request.files['pdfFile']
+    if not file or file.filename == '': return jsonify({'error': 'No se seleccionó archivo'}), 400
+    
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    return jsonify({'message': 'Archivo subido con éxito', 'filename': filename})
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/api/process', methods=['POST'])
+def process_file():
+    data = request.json
+    filename, pages = data.get('filename'), data.get('pages')
+    if not filename or not pages: return jsonify({'error': 'Faltan datos para procesar'}), 400
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not os.path.exists(filepath): return jsonify({'error': 'Archivo no encontrado'}), 404
+
+    try:
+        count = process_pdf(filepath, pages)
+        if count > 0:
+            return jsonify({'message': f'Éxito: Se extrajeron {count} registros.'})
+        else:
+            return jsonify({'message': 'Proceso completado, pero no se encontraron datos. Revisa tus patrones en app/config.py'})
+    except Exception as e:
+        return jsonify({'error': f'Error en el servidor: {str(e)}'}), 500
+
+@app.route('/api/get-data')
+def get_data():
+    db = SessionLocal()
+    try:
+        data = db.query(ExtractedData).all()
+        return jsonify([{
+                "id": item.id, "source_file": item.source_file, "phone_line": item.phone_line,
+                "event_type": item.event_type, "timestamp": item.timestamp.isoformat(),
+                "direction": item.direction, "contact": item.contact,
+                "description": item.description, "value": item.value
+            } for item in data
+        ])
+    finally:
+        db.close()
+
+@app.route('/api/export-csv')
+def export_csv():
+    db = SessionLocal()
+    try:
+        query = db.query(ExtractedData)
+        df = pd.read_sql(query.statement, query.session.bind)
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S')
+        return Response(
+            df.to_csv(index=False),
+            mimetype="text/csv",
+            headers={"Content-disposition": "attachment; filename=reporte_de_datos.csv"}
+        )
+    finally:
+        db.close()
+
+if __name__ == '__main__': app.run(host='0.0.0.0', port=8080)
+EOF
+echo "  -> main.py creado."
+echo "✅ Aplicación Python creada."
+echo ""
+
+# --- 4. Plantilla HTML Única y Final ---
+echo "PASO 4: Creando la plantilla HTML final con UI de app móvil..."
+cat > app/templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador PDF v5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #e5e7eb; }
+        .nav-item.active { color: #4f46e5; border-top-color: #4f46e5; }
+        .main-content { padding-bottom: 80px; } /* Space for bottom nav */
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+    <header class="bg-white shadow-md text-center p-4">
+        <h1 class="text-2xl font-bold text-gray-800">Analizador de Facturas</h1>
+    </header>
+
+    <main id="main-content" class="flex-grow p-4 overflow-y-auto">
+        <!-- VISTA DE CARGA -->
+        <div id="upload-view" class="view-content">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="upload"></i>Cargar y Visualizar PDF</h2>
+                <input type="file" id="pdf-input" accept=".pdf" class="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+                <div id="viewer-container" class="hidden">
+                    <div id="viewer-controls" class="flex items-center justify-between bg-gray-100 p-2 rounded-md mb-2">
+                        <div>
+                            <button id="prev-page" class="p-2 rounded-md hover:bg-gray-200"><i data-lucide="arrow-left"></i></button>
+                            <span id="page-num" class="mx-2"></span> / <span id="page-count" class="mx-2"></span>
+                            <button id="next-page" class="p-2 rounded-md hover:bg-gray-200"><i data-lucide="arrow-right"></i></button>
+                        </div>
+                        <label class="flex items-center gap-2 font-medium">
+                            <input type="checkbox" id="include-page-checkbox"> Incluir esta página
+                        </label>
+                    </div>
+                    <canvas id="pdf-canvas" class="border rounded-md w-full"></canvas>
+                    <button id="process-button" class="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 disabled:bg-gray-400">
+                        <i data-lucide="cog"></i> <span id="process-button-text">Procesar Páginas Seleccionadas</span>
+                    </button>
+                    <div id="status-message" class="mt-2 text-center"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA DE ANÁLISIS (TABLA) -->
+        <div id="analyze-view" class="view-content hidden">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="table-2"></i>Tabla de Datos</h2>
+                <input type="text" id="quick-filter" placeholder="Búsqueda rápida en la tabla..." class="w-full p-2 border rounded-md mb-4">
+                <div id="data-grid" class="ag-theme-alpine" style="height: 60vh; width: 100%;"></div>
+            </div>
+        </div>
+
+        <!-- VISTA DE DASHBOARD (GRÁFICOS) -->
+        <div id="dashboard-view" class="view-content hidden">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2"><i data-lucide="pie-chart"></i>Dashboard Visual</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="h-80"><canvas id="callsChart"></canvas></div>
+                    <div class="h-80"><canvas id="linesChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA DE EXPORTACIÓN -->
+        <div id="export-view" class="view-content hidden">
+            <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                <h2 class="text-xl font-semibold mb-4 flex items-center justify-center gap-2"><i data-lucide="file-down"></i>Exportar Datos</h2>
+                <p class="mb-4 text-gray-600">Exporta todos los datos extraídos a un archivo CSV.</p>
+                <button id="export-csv" class="bg-green-600 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 mx-auto hover:bg-green-700">
+                    <i data-lucide="download"></i> Descargar .CSV
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-t flex justify-around border-t">
+        <button data-view="upload-view" class="nav-item flex-1 p-4 text-center border-t-4 active"><i data-lucide="upload"></i><span class="block text-xs">Cargar</span></button>
+        <button data-view="analyze-view" class="nav-item flex-1 p-4 text-center border-t-4 border-transparent"><i data-lucide="table-2"></i><span class="block text-xs">Analizar</span></button>
+        <button data-view="dashboard-view" class="nav-item flex-1 p-4 text-center border-t-4 border-transparent"><i data-lucide="pie-chart"></i><span class="block text-xs">Dashboard</span></button>
+        <button data-view="export-view" class="nav-item flex-1 p-4 text-center border-t-4 border-transparent"><i data-lucide="file-down"></i><span class="block text-xs">Exportar</span></button>
+    </nav>
+    
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+EOF
+echo "✅ Plantilla HTML final creada."
+echo ""
+
+# --- 5. Lógica JavaScript de la Aplicación ---
+echo "PASO 5: Creando el archivo JavaScript de la aplicación..."
+cat > app/static/js/app.js << 'EOF'
+document.addEventListener('DOMContentLoaded', () => {
+    // --- State Management ---
+    let pdfDoc = null;
+    let currentPageNum = 1;
+    let pagesToInclude = new Set();
+    let currentFilename = null;
+    let gridApi;
+
+    // --- DOM Elements ---
+    const pdfInput = document.getElementById('pdf-input');
+    const viewerContainer = document.getElementById('viewer-container');
+    const canvas = document.getElementById('pdf-canvas');
+    const pageNumEl = document.getElementById('page-num');
+    const pageCountEl = document.getElementById('page-count');
+    const prevPageBtn = document.getElementById('prev-page');
+    const nextPageBtn = document.getElementById('next-page');
+    const includeCheckbox = document.getElementById('include-page-checkbox');
+    const processButton = document.getElementById('process-button');
+    const statusMessage = document.getElementById('status-message');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    // --- Event Listeners ---
+    pdfInput.addEventListener('change', handleFileSelect);
+    prevPageBtn.addEventListener('click', onPrevPage);
+    nextPageBtn.addEventListener('click', onNextPage);
+    includeCheckbox.addEventListener('change', togglePageInclusion);
+    processButton.addEventListener('click', processPDF);
+    document.getElementById('export-csv').addEventListener('click', () => window.location.href = '/api/export-csv');
+
+    navItems.forEach(item => item.addEventListener('click', handleNavClick));
+
+    // --- Functions ---
+    async function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        setStatus('Subiendo y cargando PDF...', 'info');
+        const formData = new FormData();
+        formData.append('pdfFile', file);
+
+        try {
+            const uploadResponse = await fetch('/api/upload', { method: 'POST', body: formData });
+            const result = await uploadResponse.json();
+            if (!uploadResponse.ok) throw new Error(result.error);
+            
+            currentFilename = result.filename;
+            const url = `/uploads/${currentFilename}`;
+            const loadingTask = pdfjsLib.getDocument(url);
+            pdfDoc = await loadingTask.promise;
+            
+            viewerContainer.classList.remove('hidden');
+            pageCountEl.textContent = pdfDoc.numPages;
+            pagesToInclude = new Set(Array.from({ length: pdfDoc.numPages }, (_, i) => i + 1));
+            currentPageNum = 1;
+            renderPage(currentPageNum);
+            setStatus('PDF cargado. Selecciona las páginas y procesa.', 'success');
+        } catch (error) {
+            setStatus(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    function renderPage(num) {
+        pdfDoc.getPage(num).then(page => {
+            const viewport = page.getViewport({ scale: 1.5 });
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            page.render({ canvasContext: context, viewport: viewport });
+            
+            pageNumEl.textContent = num;
+            includeCheckbox.checked = pagesToInclude.has(num);
+            updateNavButtons();
+        });
+    }
+
+    function updateNavButtons() {
+        prevPageBtn.disabled = currentPageNum <= 1;
+        nextPageBtn.disabled = currentPageNum >= pdfDoc.numPages;
+    }
+
+    function onPrevPage() { if (currentPageNum > 1) renderPage(--currentPageNum); }
+    function onNextPage() { if (currentPageNum < pdfDoc.numPages) renderPage(++currentPageNum); }
+
+    function togglePageInclusion() {
+        if (includeCheckbox.checked) {
+            pagesToInclude.add(currentPageNum);
+        } else {
+            pagesToInclude.delete(currentPageNum);
+        }
+    }
+
+    async function processPDF() {
+        if (pagesToInclude.size === 0) {
+            setStatus('Error: Debes incluir al menos una página.', 'error');
+            return;
+        }
+
+        processButton.disabled = true;
+        setStatus('Procesando, por favor espera...', 'info');
+
+        try {
+            const response = await fetch('/api/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: currentFilename, pages: Array.from(pagesToInclude) })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+            
+            setStatus(result.message, 'success');
+            loadDataIntoGrid();
+        } catch (error) {
+            setStatus(`Error: ${error.message}`, 'error');
+        } finally {
+            processButton.disabled = false;
+        }
+    }
+
+    function handleNavClick(event) {
+        const viewId = event.currentTarget.dataset.view;
+        
+        document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+        document.getElementById(viewId).classList.remove('hidden');
+        
+        navItems.forEach(n => n.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+
+        if (viewId === 'dashboard-view') loadAndRenderCharts();
+    }
+
+    function initializeGrid() {
+        const columnDefs = [
+            { field: "phone_line", headerName: "Línea", filter: true, width: 150 },
+            { field: "event_type", headerName: "Tipo", filter: true, width: 120 },
+            { field: "timestamp", headerName: "Fecha y Hora", sort: 'desc', width: 180, 
+              valueFormatter: p => new Date(p.value).toLocaleString() },
+            { field: "direction", headerName: "Dirección", width: 100 },
+            { field: "contact", headerName: "Contacto", filter: true },
+            { field: "description", headerName: "Descripción", flex: 1 },
+            { field: "value", headerName: "Valor" },
+            { field: "source_file", headerName: "Archivo", filter: true },
+        ];
+        const gridOptions = {
+            columnDefs,
+            defaultColDef: { sortable: true, resizable: true },
+            onGridReady: (params) => { gridApi = params.api; }
+        };
+        new agGrid.Grid(document.getElementById('data-grid'), gridOptions);
+        document.getElementById('quick-filter').addEventListener('input', (e) => gridApi.setQuickFilter(e.target.value));
+    }
+
+    async function loadDataIntoGrid() {
+        if (!gridApi) initializeGrid();
+        const response = await fetch('/api/get-data');
+        const data = await response.json();
+        gridApi.setRowData(data);
+    }
+    
+    let callsChart, linesChart;
+    async function loadAndRenderCharts() {
+        const response = await fetch('/api/get-data');
+        const data = await response.json();
+
+        // Gráfico de llamadas por contacto
+        const callsData = data.filter(d => d.event_type === 'Llamada' && d.direction === 'OUT');
+        const callsByContact = callsData.reduce((acc, call) => {
+            acc[call.contact] = (acc[call.contact] || 0) + 1;
+            return acc;
+        }, {});
+        const sortedCalls = Object.entries(callsByContact).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        if (callsChart) callsChart.destroy();
+        callsChart = createBarChart('callsChart', 'Top 10 Contactos (Llamadas Salientes)', sortedCalls.map(c => c[0]), sortedCalls.map(c => c[1]), '#3b82f6');
+
+        // Gráfico de eventos por línea
+        const eventsByLine = data.reduce((acc, item) => {
+            acc[item.phone_line] = (acc[item.phone_line] || 0) + 1;
+            return acc;
+        }, {});
+        if (linesChart) linesChart.destroy();
+        linesChart = createBarChart('linesChart', 'Total de Eventos por Línea Telefónica', Object.keys(eventsByLine), Object.values(eventsByLine), '#16a34a', 'pie');
+    }
+
+    function createBarChart(canvasId, label, labels, data, color, type = 'bar') {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        return new Chart(ctx, {
+            type, data: { labels, datasets: [{ label, data, backgroundColor: color }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    function setStatus(message, type) {
+        statusMessage.textContent = message;
+        statusMessage.className = 'mt-2 text-center text-sm font-medium ';
+        if (type === 'success') statusMessage.classList.add('text-green-600');
+        else if (type === 'error') statusMessage.classList.add('text-red-600');
+        else statusMessage.classList.add('text-blue-600');
+    }
+
+    // --- Init ---
+    lucide.createIcons();
+    initializeGrid();
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js`;
+});
+EOF
+echo "✅ Archivo JavaScript de la aplicación creado."
+echo ""
+
+echo "------------------------------------------------------------------"
+echo "✅ ¡PROCESO COMPLETADO! La aplicación v5 está lista."
+echo ""
+echo "➡️ PRÓXIMOS PASOS:"
+echo "1. **MUY IMPORTANTE:** Abre 'app/config.py'. Los patrones ya están ajustados para tus PDFs de T-Mobile, pero aquí es donde los puedes modificar en el futuro."
+echo "2. Presiona el botón verde 'Run' para iniciar la aplicación."
+echo "------------------------------------------------------------------"
