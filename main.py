@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from werkzeug.utils import secure_filename
 from app.db.database import init_db, SessionLocal
 from app.db.models import ExtractedData
-from app.hybrid_processor import extract_data_with_hybrid_approach
+from app.optimized_processor import extract_data_with_optimized_processing
 from app.ai_chat import get_chat_response
 
 # --- Configuración de la App ---
@@ -56,9 +56,9 @@ def process_file():
         print("Warning: No Google API Key found, using regex-only mode")
     
     try:
-        record_count = extract_data_with_hybrid_approach(filepath, pages)
+        record_count = extract_data_with_optimized_processing(filepath, pages)
         if record_count > 0:
-            return jsonify({'message': f'Éxito: Se extrajeron {record_count} registros usando IA híbrida (AI + regex).'})
+            return jsonify({'message': f'Éxito: Se extrajeron {record_count} registros procesando todas las páginas seleccionadas.'})
         else:
             return jsonify({'message': 'El procesamiento completó pero no se encontraron datos estructurados que extraer.'}), 200
     except Exception as e:

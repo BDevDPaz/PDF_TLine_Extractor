@@ -32,18 +32,18 @@ The frontend is organized into five tab-based sections:
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
 
-### Hybrid AI-Powered Data Processing Pipeline
-The system implements a robust hybrid PDF processing workflow:
+### Optimized AI-Powered Data Processing Pipeline
+The system implements a comprehensive PDF processing workflow that handles all selected pages in a single operation:
 
 1. **File Upload Handler**: Secures uploaded PDFs in the `data` directory
-2. **Hybrid Processor Module**: Uses Google Gemini AI with regex fallback for maximum reliability
-3. **Intelligent Data Extraction**: 
-   - Primary: AI analyzes PDF content in optimized chunks to avoid timeouts
-   - Fallback: Advanced regex patterns for reliable extraction when AI fails
-   - Extracts call records, message logs, and data usage with timestamps
+2. **Optimized Processor Module**: Processes all selected pages simultaneously with intelligent content optimization
+3. **Comprehensive Data Extraction**: 
+   - Primary: AI analyzes complete document content with smart summarization to avoid timeouts
+   - Secondary: Comprehensive regex patterns covering all pages when AI extraction is insufficient
+   - Extracts call records, message logs, and data usage with full temporal context
 4. **Chat Assistant**: AI-powered conversational interface for querying extracted data
 5. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
-6. **Timeout Protection**: Chunked processing and strict limits prevent worker crashes
+6. **Complete Page Coverage**: Processes all user-selected pages in one operation while maintaining efficiency
 
 ### Database Design
 Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
