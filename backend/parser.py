@@ -344,30 +344,29 @@ class PDFParser:
                     logging.info(f"📅 Nueva fecha detectada: {current_date.strftime('%Y-%m-%d')}")
                     continue
                 
-                # Detectar eventos de llamadas
-                # Formato: 10:15 AM    IN (818) 466-3558   Incoming           F          2       -
-                call_match = re.search(r'(\d{1,2}:\d{2}\s+[AP]M)\s+(IN|OUT)\s+(\([^)]+\)|\S+)\s+(.+?)\s+([AF-])\s+(\d+)\s+[-]', line)
+                # Detectar eventos de llamadas en formato T-Mobile específico
+                # Formato 1: Jul 17           10:15 AM    IN (818) 466-3558   Incoming           F          2       -
+                # Formato 2:                  11:05 AM   OUT (818) 466-3558   to Canogapark/CA   F          1       -
+                # Buscar eventos específicos del formato T-Mobile real
+                # Ejemplo: "Jul 17           10:15 AM    IN (818) 466-3558   Incoming           F          2       -"
+                # Ejemplo: "                 11:05 AM   OUT (818) 466-3558   to Canogapark/CA   F          1       -"
+                call_match = re.search(r'(\d{1,2}:\d{2}\s+[AP]M)\s+(IN|OUT)\s+\((\d{3})\)\s*(\d{3}-\d{4})\s+(.+?)\s+([AF-])\s+(\d+)', line)
                 if call_match and current_line_number and current_date:
                     try:
                         time_str = call_match.group(1)
                         direction = call_match.group(2)
-                        contact_number = call_match.group(3).strip()
-                        description = call_match.group(4).strip()
-                        call_type = call_match.group(5)
-                        duration = int(call_match.group(6))
+                        area_code = call_match.group(3)
+                        phone_rest = call_match.group(4)
+                        description = call_match.group(5).strip()
+                        call_type = call_match.group(6)
+                        duration = int(call_match.group(7))
                         
-                        # Extraer y limpiar número de contacto
-                        full_contact_info = contact_number + " " + description
-                        phone_match = re.search(r'\((\d{3})\)\s*(\d{3})-(\d{4})', full_contact_info)
-                        if phone_match:
-                            contact_number = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
-                        elif contact_number == "123":
+                        # Construir número completo
+                        contact_number = f"({area_code}) {phone_rest}"
+                        
+                        # El número ya está formateado correctamente
+                        if area_code == "123" and phone_rest == "":
                             contact_number = "Voicemail"
-                        elif re.search(r'\d{10}', contact_number):
-                            # Formatear números de 10 dígitos
-                            digits = re.sub(r'[^\d]', '', contact_number)
-                            if len(digits) == 10:
-                                contact_number = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
                         
                         # Crear timestamp completo
                         hour, minute_period = time_str.split(':')
