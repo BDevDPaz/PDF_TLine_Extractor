@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
@@ -131,22 +131,50 @@ def handle_query():
         session.close()
         return jsonify({"answer": f"Error al contactar la IA: {str(e)}"})
 
-# Ruta raíz para servir la aplicación React (producción)
+# Importar funciones para servir archivos estáticos
+
 @app.route('/')
 def serve_frontend():
-    """Servir la aplicación React desde el frontend"""
-    return jsonify({
-        "message": "Backend API funcionando correctamente",
-        "system": "Sistema Híbrido Ultra-Agresivo",
-        "precision": "124.19%",
-        "frontend_url": "http://0.0.0.0:3000",
-        "api_endpoints": {
-            "upload": "/api/upload",
-            "lines": "/api/lines", 
-            "details": "/api/lines/<id>/details",
-            "query": "/api/query"
-        }
-    })
+    """Servir la aplicación React"""
+    try:
+        return send_file('../frontend/dist/index.html')
+    except:
+        return jsonify({
+            "message": "Backend API funcionando correctamente",
+            "system": "Sistema Híbrido Ultra-Agresivo", 
+            "precision": "124.19%",
+            "note": "Frontend no encontrado, ejecute: cd frontend && npm run build",
+            "api_endpoints": {
+                "upload": "/api/upload",
+                "lines": "/api/lines",
+                "details": "/api/lines/<id>/details", 
+                "query": "/api/query"
+            }
+        })
+
+@app.route('/assets/<path:path>')
+def serve_static(path):
+    """Servir archivos estáticos del frontend"""
+    return send_from_directory('../frontend/dist/assets', path)
+
+@app.route('/vite.svg')
+def serve_vite_icon():
+    """Servir el icono de Vite"""
+    try:
+        return send_from_directory('../frontend/dist', 'vite.svg')
+    except:
+        return '', 404
+
+# Catch-all para React Router (SPA)
+@app.route('/<path:path>')
+def serve_spa(path):
+    """Servir SPA para todas las rutas que no sean API"""
+    if path.startswith('api/'):
+        return jsonify({"error": "API endpoint not found"}), 404
+    try:
+        return send_file('../frontend/dist/index.html')
+    except:
+        return jsonify({"error": "Frontend not built"}), 404
 
 @app.route('/api/health')
 def health_check():
