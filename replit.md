@@ -33,10 +33,13 @@ The frontend is organized into five tab-based sections with privacy enhancements
 
 ## Backend Architecture
 
-### Web Framework
+### Web Framework  
 - **Flask** as the primary web framework with template rendering
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
+- **Updated main.py**: Sistema completo integrado con híbrido ultra-agresivo
+- **Cascading extraction**: Sistema de extracción por cascada con 3 niveles de respaldo
+- **Advanced logging**: Sistema de logging completo para depuración y monitoreo
 
 ### Ultra-Robust Multi-Field Data Processing Pipeline  
 The system implements a production-grade PDF processing workflow achieving **92.5% extraction accuracy** (344 of 372 records) for telecommunications data:
