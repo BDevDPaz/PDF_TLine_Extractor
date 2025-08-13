@@ -59,14 +59,18 @@ def process_file():
         print("Warning: No Google API Key found, using regex-only mode")
     
     try:
-        # Usar procesador mejorado
-        from app.enhanced_regex_processor import extract_data_with_enhanced_regex
-        record_count = extract_data_with_enhanced_regex(filepath, pages)
+        # Usar extractor extremadamente robusto
+        from app.robust_pdf_extractor import robust_extractor
+        result = robust_extractor.extract_data_robust(filepath, pages)
         
-        if record_count > 0:
-            return jsonify({'message': f'Procesamiento completado: {record_count} registros extraídos'})
+        if result["success"]:
+            return jsonify({
+                'success': True,
+                'message': f'Extracción robusta completada: {result["records_processed"]} registros procesados',
+                'records_count': result["records_processed"]
+            })
         else:
-            return jsonify({'message': 'No se encontraron datos para extraer'}), 200
+            return jsonify({'error': 'No se pudieron extraer datos del PDF'}), 500
     except Exception as e:
         return jsonify({'error': f'Error en la IA: {str(e)}'}), 500
 
