@@ -11,12 +11,92 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #e5e7eb; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .nav-btn.active { background-color: #2563eb; color: white; }
-        .chat-message { animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .nav-btn { 
+            transition: all 0.3s ease; 
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        .nav-btn.active { 
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+        }
+        .nav-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .stat-card {
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+        .ai-upload-zone {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px dashed #0ea5e9;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .ai-upload-zone:hover {
+            border-color: #0284c7;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            transform: scale(1.02);
+        }
+        .processing-indicator {
+            background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+            border-left: 4px solid #f59e0b;
+            backdrop-filter: blur(10px);
+        }
+        .chart-container {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .data-table {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .chat-message { animation: fadeInUp 0.3s ease; }
+        .filter-panel {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        @keyframes fadeInUp { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .bottom-nav {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
@@ -32,44 +112,50 @@
     <main class="flex-1 container mx-auto px-4 py-4 mb-20">
         <!-- Tab 1: AI Analysis -->
         <div id="tab-upload" class="tab-content active">
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg shadow-lg p-8">
-                <div class="text-center mb-6">
-                    <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-                        <i data-lucide="brain" class="w-8 h-8 text-white"></i>
+            <div class="glass-card rounded-2xl shadow-2xl p-8">
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full mb-6 shadow-lg">
+                        <i data-lucide="brain" class="w-10 h-10 text-white"></i>
                     </div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Análisis Automático con IA</h2>
-                    <p class="text-gray-600">La IA procesará tu PDF y mostrará los datos visualizados instantáneamente</p>
+                    <h2 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
+                        Análisis Inteligente Automático
+                    </h2>
+                    <p class="text-gray-600 text-lg">La IA procesará tu PDF y generará visualizaciones instantáneas</p>
                 </div>
                 
-                <div class="bg-white rounded-lg border-2 border-dashed border-blue-200 p-8 text-center hover:border-blue-400 transition-colors" id="drop-zone">
-                    <i data-lucide="upload" class="mx-auto mb-4 w-12 h-12 text-blue-500"></i>
-                    <p class="text-lg font-medium text-gray-700 mb-2">Arrastra tu PDF aquí</p>
-                    <p class="text-gray-500 mb-4">o haz clic para seleccionar</p>
+                <div class="ai-upload-zone rounded-xl p-10 text-center" id="drop-zone">
+                    <div class="mb-6">
+                        <i data-lucide="upload-cloud" class="mx-auto mb-4 w-16 h-16 text-blue-500"></i>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Arrastra tu PDF aquí</h3>
+                        <p class="text-gray-500 mb-6">o haz clic para seleccionar desde tu dispositivo</p>
+                    </div>
+                    
                     <input type="file" id="pdf-input" accept=".pdf" class="hidden">
                     <button onclick="document.getElementById('pdf-input').click()" 
-                            class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                        Seleccionar PDF
+                            class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-300">
+                        <i data-lucide="sparkles" class="inline w-5 h-5 mr-2"></i>
+                        Analizar con IA
                     </button>
                 </div>
                 
                 <!-- AI Processing Indicator -->
-                <div id="ai-processing" class="hidden mt-6 bg-white rounded-lg p-6 border border-blue-200">
-                    <div class="flex items-center mb-4">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                        <h3 class="text-lg font-semibold text-gray-800">IA Procesando...</h3>
+                <div id="ai-processing" class="hidden mt-8 processing-indicator rounded-xl p-6">
+                    <div class="flex items-center mb-6">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mr-4"></div>
+                        <h3 class="text-xl font-bold text-amber-800">🤖 IA Procesando Documento</h3>
                     </div>
-                    <div class="space-y-2">
-                        <div class="flex justify-between text-sm">
-                            <span id="step-upload" class="text-gray-500">1. Cargando archivo</span>
-                            <span id="progress-upload" class="text-blue-600">●</span>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center p-3 bg-white bg-opacity-50 rounded-lg">
+                            <span id="step-upload" class="font-medium">1. Cargando archivo</span>
+                            <span id="progress-upload" class="text-2xl">○</span>
                         </div>
-                        <div class="flex justify-between text-sm">
-                            <span id="step-extract" class="text-gray-400">2. Extrayendo datos</span>
-                            <span id="progress-extract" class="text-gray-300">○</span>
+                        <div class="flex justify-between items-center p-3 bg-white bg-opacity-50 rounded-lg">
+                            <span id="step-extract" class="font-medium">2. Extrayendo datos con IA</span>
+                            <span id="progress-extract" class="text-2xl">○</span>
                         </div>
-                        <div class="flex justify-between text-sm">
-                            <span id="step-visualize" class="text-gray-400">3. Generando visualizaciones</span>
-                            <span id="progress-visualize" class="text-gray-300">○</span>
+                        <div class="flex justify-between items-center p-3 bg-white bg-opacity-50 rounded-lg">
+                            <span id="step-visualize" class="font-medium">3. Generando visualizaciones</span>
+                            <span id="progress-visualize" class="text-2xl">○</span>
                         </div>
                     </div>
                 </div>
@@ -78,9 +164,14 @@
 
         <!-- Tab 2: Data Dashboard -->
         <div id="tab-data" class="tab-content">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="layout-dashboard"></i> Dashboard de Datos
+            <div class="glass-card rounded-2xl shadow-2xl p-8">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg">
+                        <i data-lucide="layout-dashboard" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <span class="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                        Dashboard de Datos
+                    </span>
                 </h2>
                 
                 <!-- Quick Stats -->
@@ -186,7 +277,31 @@
                     </div>
                 </div>
 
-                <div id="data-grid" class="ag-theme-alpine" style="height: 400px;"></div>
+                <div id="data-table" class="data-table">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Línea</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha/Hora</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dirección</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-tbody" class="bg-white divide-y divide-gray-200">
+                                <!-- Data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="bg-gray-50 px-6 py-3 border-t">
+                        <div class="text-sm text-gray-700">
+                            <span id="table-status">Cargando datos...</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -293,7 +408,7 @@
     </main>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+    <nav class="fixed bottom-0 left-0 right-0 bottom-nav border-t shadow-2xl">
         <div class="flex justify-around">
             <button class="nav-btn active flex-1 py-3 text-center" data-tab="upload">
                 <i data-lucide="brain" class="mx-auto mb-1"></i>
@@ -493,84 +608,92 @@
         }
     }
 
-    // Data grid initialization
-    function initializeGrid() {
-        const columnDefs = [
-            { field: "phone_line", headerName: "Línea", filter: true, width: 150 },
-            { field: "event_type", headerName: "Tipo", filter: true, width: 100 },
-            { field: "timestamp", headerName: "Fecha/Hora", sort: 'desc', width: 180 },
-            { field: "direction", headerName: "Dirección", width: 80 },
-            { field: "contact", headerName: "Contacto", filter: true },
-            { field: "description", headerName: "Descripción" },
-            { field: "value", headerName: "Valor", width: 100 }
-        ];
+    // Simple table rendering - no more AG-Grid problems
+    function renderDataTable(data) {
+        const tbody = document.getElementById('data-tbody');
+        const statusEl = document.getElementById('table-status');
         
-        const gridOptions = {
-            columnDefs: columnDefs,
-            defaultColDef: { sortable: true, resizable: true, filter: true },
-            onGridReady: (params) => { 
-                gridApi = params.api;
-                console.log('Grid initialized successfully');
-            }
-        };
+        if (!tbody || !data || data.length === 0) {
+            if (statusEl) statusEl.textContent = 'No hay datos disponibles';
+            return;
+        }
         
-        const gridDiv = document.getElementById('data-grid');
-        if (gridDiv && !gridApi) {
-            try {
-                const gridInstance = agGrid.createGrid(gridDiv, gridOptions);
-                console.log('AG-Grid created:', gridInstance);
-            } catch (error) {
-                console.error('Error creating grid:', error);
-            }
+        tbody.innerHTML = '';
+        
+        data.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.phone_line || 'N/A'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span class="px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(item.event_type)}">${item.event_type || 'N/A'}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(item.timestamp)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span class="px-2 py-1 text-xs rounded-full ${getDirectionColor(item.direction)}">${item.direction || 'N/A'}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.contact || 'N/A'}</td>
+                <td class="px-6 py-4 text-sm text-gray-900">${item.description || 'N/A'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.value || 'N/A'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        if (statusEl) statusEl.textContent = `${data.length} registros mostrados`;
+    }
+
+    function getTypeColor(type) {
+        switch(type) {
+            case 'Llamada': return 'bg-blue-100 text-blue-800';
+            case 'Mensaje': return 'bg-green-100 text-green-800';
+            case 'Datos': return 'bg-purple-100 text-purple-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+
+    function getDirectionColor(direction) {
+        switch(direction) {
+            case 'IN': return 'bg-green-100 text-green-800';
+            case 'OUT': return 'bg-orange-100 text-orange-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return 'N/A';
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleString('es-ES', {
+                year: 'numeric',
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return dateStr;
         }
     }
 
     async function loadData() {
         try {
             const response = await fetch('/api/get-data');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
             const data = await response.json();
-            console.log('Data loaded:', data.length, 'records');
             
-            if (Array.isArray(data) && data.length > 0) {
-                // Ensure grid is initialized
-                if (!gridApi) {
-                    initializeGrid();
-                    // Wait a bit for grid to initialize
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                // Set data if grid is ready
-                if (gridApi && typeof gridApi.setRowData === 'function') {
-                    gridApi.setRowData(data);
-                } else {
-                    console.warn('Grid API not ready, retrying...');
-                    setTimeout(() => loadData(), 500);
-                    return;
-                }
-                
+            if (Array.isArray(data)) {
+                renderDataTable(data);
                 renderCharts(data);
                 updateStatistics(data);
+                
                 const recordsElement = document.getElementById('records-count');
                 if (recordsElement) {
                     recordsElement.textContent = `${data.length} registros`;
                 }
-            } else {
-                console.warn('No data found or invalid format');
-                const recordsElement = document.getElementById('records-count');
-                if (recordsElement) {
-                    recordsElement.textContent = '0 registros';
-                }
             }
         } catch (error) {
             console.error('Error loading data:', error);
-            const recordsElement = document.getElementById('records-count');
-            if (recordsElement) {
-                recordsElement.textContent = 'Error cargando datos';
-            }
+            const statusEl = document.getElementById('table-status');
+            if (statusEl) statusEl.textContent = 'Error cargando datos';
         }
     }
 
@@ -879,9 +1002,7 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         lucide.createIcons();
-        initializeGrid();
-        // Load data after a short delay to ensure grid is ready
-        setTimeout(() => loadData(), 300);
+        loadData();
     });
 </script>
 </body>
