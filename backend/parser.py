@@ -248,6 +248,114 @@ class PDFParser:
                             
         except Exception as e:
             logging.error(f"❌ Error en extracción tabular: {e}")
+    
+    def _extract_tmobile_usage_details(self, text):
+        """Estrategia 5: Extracción especializada para T-Mobile Usage Details"""
+        try:
+            # Procesar solo páginas con USAGE DETAILS
+            pages_text = []
+            for page_num in range(len(self.doc)):
+                page_text = self.doc[page_num].get_text("text")
+                if "USAGE DETAILS" in page_text or any(keyword in page_text for keyword in ["TALK", "IN (", "OUT (", "Jul ", "Aug "]):
+                    pages_text.append(page_text)
+                    # Limitar a las primeras 10 páginas relevantes para evitar timeout
+                    if len(pages_text) >= 10:
+                        break
+            
+            if not pages_text:
+                return
+                
+            combined_text = "\n".join(pages_text)
+            lines = combined_text.strip().split('\n')
+            current_line_number = None
+            current_date = None
+            
+            # Buscar líneas telefónicas en el texto combinado
+            for i, line in enumerate(lines):
+                if re.match(r'\(\d{3}\)\s*\d{3}-\d{4}', line.strip()):
+                    phone_match = re.search(r'\((\d{3})\)\s*(\d{3})-(\d{4})', line)
+                    if phone_match:
+                        phone_number = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+                        existing_line = self.session.query(Line).filter_by(phone_number=phone_number).first()
+                        if not existing_line:
+                            new_line = Line(phone_number=phone_number)
+                            self.session.add(new_line)
+                            self.session.flush()
+                            current_line_number = new_line
+                        else:
+                            current_line_number = existing_line
+                        logging.info(f"📱 LÍNEA T-MOBILE DETECTADA: {phone_number}")
+                        break
+            
+            # Procesar eventos de llamadas en formato T-Mobile
+            for i, line in enumerate(lines):
+                line = line.strip()
+                
+                # Detectar nueva fecha (formato: Jul 17, Jul 18, etc.)
+                date_match = re.match(r'(Jul|Aug|Sep|Oct|Nov|Dec|Jan|Feb|Mar|Apr|May|Jun)\s+(\d{1,2})', line)
+                if date_match:
+                    month_str = date_match.group(1)
+                    day = int(date_match.group(2))
+                    month = MONTH_MAP.get(month_str, 7)
+                    current_date = datetime(2024, month, day)  # Asumir 2024
+                    continue
+                
+                # Detectar eventos de llamadas
+                # Formato: 10:15 AM    IN (818) 466-3558   Incoming           F          2       -
+                call_match = re.search(r'(\d{1,2}:\d{2}\s+[AP]M)\s+(IN|OUT)\s+(\([^)]+\)|\S+)\s+(.+?)\s+([AF-])\s+(\d+)\s+[-]', line)
+                if call_match and current_line_number and current_date:
+                    try:
+                        time_str = call_match.group(1)
+                        direction = call_match.group(2)
+                        contact_number = call_match.group(3).strip()
+                        description = call_match.group(4).strip()
+                        call_type = call_match.group(5)
+                        duration = int(call_match.group(6))
+                        
+                        # Extraer y limpiar número de contacto
+                        full_contact_info = contact_number + " " + description
+                        phone_match = re.search(r'\((\d{3})\)\s*(\d{3})-(\d{4})', full_contact_info)
+                        if phone_match:
+                            contact_number = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+                        elif contact_number == "123":
+                            contact_number = "Voicemail"
+                        elif re.search(r'\d{10}', contact_number):
+                            # Formatear números de 10 dígitos
+                            digits = re.sub(r'[^\d]', '', contact_number)
+                            if len(digits) == 10:
+                                contact_number = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+                        
+                        # Crear timestamp completo
+                        hour, minute_period = time_str.split(':')
+                        minute, period = minute_period.split()
+                        hour = int(hour)
+                        minute = int(minute)
+                        if period.upper() == 'PM' and hour != 12:
+                            hour += 12
+                        elif period.upper() == 'AM' and hour == 12:
+                            hour = 0
+                        
+                        timestamp = current_date.replace(hour=hour, minute=minute)
+                        
+                        # Crear evento de llamada
+                        call_event = CallEvent(
+                            line_id=current_line_number.id,
+                            timestamp=timestamp,
+                            counterpart_number=contact_number,
+                            description=f"{direction} - {description}",
+                            call_type=direction,
+                            duration_minutes=duration
+                        )
+                        self.session.add(call_event)
+                        self.total_extracted += 1
+                        self.extraction_stats['calls'] += 1
+                        logging.info(f"📞 T-MOBILE LLAMADA: {direction} {contact_number} - {duration}min")
+                        
+                    except Exception as e:
+                        logging.debug(f"⚠️ Error procesando llamada T-Mobile: {line} | {e}")
+                        
+        except Exception as e:
+            logging.error(f"❌ Error en extracción T-Mobile: {e}")
 
     def run_extraction(self):
         logging.info("🚀 ESTRATEGIA HÍBRIDA: Iniciando extracción ultra-agresiva")
@@ -264,8 +372,13 @@ class PDFParser:
             logging.info("🎯 ESTRATEGIA 4: Extracción tabular moderna")
             self._extract_tabular_data(all_text)
             
-            # Si no hay resultados, usar estrategia original
+            # Estrategia especializada para T-Mobile Usage Details
             if self.total_extracted == 0:
+                logging.info("🎯 ESTRATEGIA 5: Extracción T-Mobile Usage Details")
+                self._extract_tmobile_usage_details(all_text)
+            
+            # Si no hay resultados suficientes, usar estrategia original (solo para PDFs pequeños)
+            if self.total_extracted == 0 and len(self.doc) <= 15:
                 logging.info("🔄 Fallback a estrategia original")
                 start_page = 3  # Ajustado para capturar más datos
                 end_page = len(self.doc) - 1  # Más agresivo en el rango
