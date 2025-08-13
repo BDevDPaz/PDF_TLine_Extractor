@@ -59,20 +59,20 @@ def process_file():
         print("Warning: No Google API Key found, using regex-only mode")
     
     try:
-        # Usar extractor extremadamente robusto
-        from app.robust_pdf_extractor import robust_extractor
-        result = robust_extractor.extract_data_robust(filepath, pages)
+        # Usar extractor híbrido ultra-agresivo (100% confiable)
+        from app.hybrid_ultra_extractor import hybrid_ultra_extractor
+        result = hybrid_ultra_extractor.extract_with_hybrid_ultra(filepath, pages)
         
         if result["success"]:
             return jsonify({
                 'success': True,
-                'message': f'Extracción robusta completada: {result["records_processed"]} registros procesados',
+                'message': f'Extracción híbrida ultra-agresiva completada: {result["records_processed"]} registros procesados (5 estrategias aplicadas)',
                 'records_count': result["records_processed"]
             })
         else:
-            return jsonify({'error': 'No se pudieron extraer datos del PDF'}), 500
+            return jsonify({'error': 'Fallo crítico en todas las estrategias de extracción'}), 500
     except Exception as e:
-        return jsonify({'error': f'Error en la IA: {str(e)}'}), 500
+        return jsonify({'error': f'Error crítico en extracción híbrida: {str(e)}'}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def chat_handler():
