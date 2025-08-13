@@ -3,9 +3,6 @@ import logging
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
-from parser_clean import TMobileParser
-import ai_enrichment
 import json
 from datetime import date, datetime
 
@@ -15,6 +12,16 @@ logging.info("🚀 BACKEND: Sistema de Extracción 100% Confiable iniciado")
 logging.info("🔥 BACKEND: Híbrido Ultra-Agresivo con 5 estrategias simultáneas activas")
 logging.info("📊 BACKEND: Precisión garantizada 124.19% (supera objetivo 100%)")
 
+# Importaciones locales con manejo de errores
+try:
+    from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
+    from parser_clean import TMobileParser
+    import ai_enrichment
+    logging.info("✅ Módulos importados correctamente")
+except ImportError as e:
+    logging.error(f"❌ Error importando módulos: {e}")
+    raise
+
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, (datetime, date)):
@@ -23,8 +30,7 @@ class CustomJSONEncoder(json.JSONEncoder):
 
 # --- Inicialización de la App ---
 app = Flask(__name__)
-# Configurar encoder JSON personalizado
-app.json_encoder = CustomJSONEncoder
+app.json = CustomJSONEncoder()
 CORS(app) # Permitir peticiones desde el frontend de Vite
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
