@@ -1,10 +1,16 @@
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 import os
 from models import SessionLocal, CallEvent, TextEvent
 from sqlalchemy import distinct
 
 def configure_ai():
     try:
+        if not genai:
+            print("ADVERTENCIA: Módulo google-generativeai no disponible.")
+            return None
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             print("ADVERTENCIA: GOOGLE_API_KEY no encontrada. La IA no funcionará.")

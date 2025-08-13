@@ -1,4 +1,7 @@
-import fitz # PyMuPDF
+try:
+    import fitz # PyMuPDF
+except ImportError:
+    fitz = None
 from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent
 from datetime import datetime
 import re
@@ -32,6 +35,8 @@ MONTH_MAP = {
 class PDFParser:
     def __init__(self, file_path):
         self.file_path = file_path
+        if not fitz:
+            raise ImportError("PyMuPDF (fitz) not available")
         self.doc = fitz.open(file_path)
         self.session = SessionLocal()
         self.current_line_db = None

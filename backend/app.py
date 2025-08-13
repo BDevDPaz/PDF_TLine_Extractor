@@ -23,7 +23,7 @@ class CustomJSONEncoder(json.JSONEncoder):
 
 # --- Inicialización de la App ---
 app = Flask(__name__)
-app.json.default = CustomJSONEncoder().default
+app.json.default = lambda o: o.isoformat() if isinstance(o, (datetime, date)) else None
 CORS(app) # Permitir peticiones desde el frontend de Vite
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -148,7 +148,7 @@ def serve_frontend():
         }
     })
 
-@app.route('/health')
+@app.route('/api/health')
 def health_check():
     """Endpoint de verificación de salud"""
     return jsonify({"status": "healthy", "service": "backend-api"})

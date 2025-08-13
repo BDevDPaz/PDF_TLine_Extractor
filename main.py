@@ -152,9 +152,11 @@ class FullStackLauncher:
 # Punto de entrada para gunicorn
 try:
     # Importar app para compatibilidad con gunicorn
-    sys.path.insert(0, 'backend')
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend')
+    sys.path.insert(0, backend_path)
     from app import app
-except ImportError:
+except ImportError as e:
+    logging.error(f"Error importing Flask app: {e}")
     app = None
 
 if __name__ == "__main__":
