@@ -2,7 +2,8 @@ import re
 import pdfplumber
 from datetime import datetime, timezone
 from dateutil import parser as dateutil_parser
-from app.database import SessionLocal, ExtractedData
+from app.db.database import SessionLocal
+from app.db.models import ExtractedData
 import logging
 
 # Configurar logging para debugging
@@ -26,16 +27,26 @@ class RobustPDFExtractor:
         self.phone_pattern = re.compile(r'\(\d{3}\)\s*\d{3}-\d{4}')
         self.date_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?!\d)', re.IGNORECASE)
         
-        # Patrones para llamadas con captura de ubicación y máxima precisión
+        # Patrones para llamadas - formato exacto del PDF detectado
         self.call_pattern = re.compile(
-            r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha
-            r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora 12h con AM/PM
-            r'(IN|OUT)\s+'                                                         # Tipo: Entrante/Saliente
-            r'((?:\(\d{3}\)\s*\d{3}-\d{4})|(?:\d{10,15})|(?:[\w\s\./\(\)\-\:]+?))\s+'  # Contacto
-            r'(.*?)\s+'                                                            # Descripción/Ubicación
-            r'([A-ZCHFWG]|-)\s+'                                                   # Código tipo llamada
-            r'(\d+|-)\s*'                                                          # Duración en minutos
-            r'(-|\$[\d\.]+)?\s*$',                                                # Costo opcional
+            r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha completa
+            r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora
+            r'(IN|OUT)\s+'                                                         # Dirección
+            r'(.*?)\s+'                                                            # Contacto/descripción
+            r'([A-Z])\s+'                                                          # Tipo (F, etc.)
+            r'(\d+)\s*'                                                            # Duración
+            r'(-|\$[\d\.]+)?\s*.*?$',                                             # Costo + contenido adicional
+            re.IGNORECASE
+        )
+        
+        # Patrón para llamadas solo con hora (sin fecha - muy común en el PDF)
+        self.call_no_date_pattern = re.compile(
+            r'^\s*(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                   # Solo hora
+            r'(IN|OUT)\s+'                                                         # Dirección  
+            r'(.*?)\s+'                                                            # Contacto/descripción
+            r'([A-Z])\s+'                                                          # Tipo
+            r'(\d+)\s*'                                                            # Duración
+            r'(-|\$[\d\.]+)?\s*.*?$',                                             # Costo + contenido adicional
             re.IGNORECASE
         )
         
@@ -45,24 +56,35 @@ class RobustPDFExtractor:
         # Patrón para detectar ubicaciones/ciudades
         self.location_pattern = re.compile(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[,/]\s*([A-Z]{2})')  # Ciudad, Estado
         
-        # Patrones para mensajes con máxima precisión
+        # Patrones para mensajes - formato exacto del PDF detectado
         self.message_pattern = re.compile(
-            r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha
+            r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha completa
             r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora
             r'(IN|OUT)\s+'                                                         # Dirección
             r'(.+?)\s+'                                                            # Contacto/descripción
             r'(TXT|PIC|MMS)\s*'                                                    # Tipo
-            r'(-|\$[\d\.]+)?\s*$',                                                # Costo
+            r'(-|\$[\d\.]+)?\s*.*?$',                                             # Costo + contenido adicional
             re.IGNORECASE
         )
         
-        # Patrones para uso de datos
+        # Patrón para mensajes solo con hora (muy común en el PDF)
+        self.message_no_date_pattern = re.compile(
+            r'^\s*(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                   # Solo hora
+            r'(IN|OUT)\s+'                                                         # Dirección
+            r'(.+?)\s+'                                                            # Contacto/descripción  
+            r'(TXT|PIC|MMS)\s*'                                                    # Tipo
+            r'(-|\$[\d\.]+)?\s*.*?$',                                             # Costo + contenido adicional
+            re.IGNORECASE
+        )
+        
+        # Patrón para uso de datos - formato exacto del PDF detectado
         self.data_pattern = re.compile(
             r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha
-            r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora
-            r'(.+?)\s+'                                                            # Descripción
-            r'([\d\.]+\s*(?:KB|MB|GB))\s*'                                         # Cantidad
-            r'(-|\$[\d\.]+)?\s*$',                                                # Costo
+            r'(Mobile Internet|Web Access)\s+'                                    # Tipo de servicio
+            r'(-)\s+'                                                              # Origen (siempre -)
+            r'(-)\s+'                                                              # Tipo (siempre -)  
+            r'([\d,\.]+)\s*'                                                       # MB (con comas)
+            r'(-|\$[\d\.]+)?\s*.*?$',                                             # Costo + contenido adicional
             re.IGNORECASE
         )
     
@@ -191,7 +213,7 @@ class RobustPDFExtractor:
         if not match:
             return None
         
-        month_str, day_str, time_str, am_pm, direction, contact_raw, description, call_type, duration, cost = match.groups()
+        month_str, day_str, time_str, am_pm, direction, contact_desc, call_type, duration, cost = match.groups()
         
         # 1. FECHA Y HORA - Parseo preciso con múltiples formatos
         event_datetime = self.parse_date_time(month_str, day_str, time_str, am_pm, bill_year)
@@ -207,23 +229,28 @@ class RobustPDFExtractor:
         # 4. TIPO - Entrante o Saliente
         event_direction = "ENTRANTE" if direction.upper() == "IN" else "SALIENTE"
         
-        # 5. CONTACTO - Número telefónico limpiado
+        # 5. CONTACTO - Extraer número de teléfono limpio  
         contact_number = "N/A"
-        if contact_raw and contact_raw.strip():
-            cleaned_contact = self.clean_phone_number(contact_raw)
-            if cleaned_contact:
-                contact_number = cleaned_contact
+        if contact_desc:
+            phone_match = self.phone_pattern.search(contact_desc)
+            if phone_match:
+                contact_number = self.clean_phone_number(phone_match.group(0))
+            # También buscar números sin paréntesis
+            elif re.search(r'\d{10,}', contact_desc):
+                numbers = re.findall(r'\d{10,}', contact_desc)
+                if numbers:
+                    contact_number = self.clean_phone_number(numbers[0])
         
         # 6. LUGAR - Extraer ubicación de la descripción
-        location = self.extract_location(description) if description else None
+        location = self.extract_location(contact_desc) if contact_desc else None
         
         # 7. DURACIÓN - En minutos
         call_duration = duration if duration and duration != "-" else "0"
         
         # Crear descripción estructurada con todos los campos
         description_parts = []
-        if description and description.strip():
-            description_parts.append(f"Descripción: {description.strip()}")
+        if contact_desc and contact_desc.strip():
+            description_parts.append(f"Descripción: {contact_desc.strip()}")
         if location:
             description_parts.append(f"Ubicación: {location}")
         if call_type and call_type != "-":
@@ -360,6 +387,126 @@ class RobustPDFExtractor:
             description=full_description,
             value=data_quantity
         )
+        
+    def process_call_no_date_line(self, line, current_date, current_line, bill_year, filename):
+        """Procesa línea de llamada sin fecha explícita usando fecha persistente"""
+        match = self.call_no_date_pattern.match(line.strip())
+        if not match or not current_date:
+            return None
+        
+        time_str, am_pm, direction, contact_desc, call_type, duration, cost = match.groups()
+        
+        # Usar fecha persistente con hora específica
+        time_parts = time_str.split(':')
+        hour = int(time_parts[0])
+        minute = int(time_parts[1])
+        
+        if am_pm and am_pm.upper() == 'PM' and hour != 12:
+            hour += 12
+        elif am_pm and am_pm.upper() == 'AM' and hour == 12:
+            hour = 0
+            
+        event_datetime = current_date.replace(hour=hour, minute=minute)
+        
+        # Procesar igual que llamada normal
+        phone_line = current_line if current_line != "Desconocida" else "N/A"
+        event_type = "Llamada"
+        event_direction = "ENTRANTE" if direction.upper() == "IN" else "SALIENTE"
+        
+        # Extraer contacto
+        contact_number = "N/A"
+        if contact_desc:
+            phone_match = self.phone_pattern.search(contact_desc)
+            if phone_match:
+                contact_number = self.clean_phone_number(phone_match.group(0))
+        
+        location = self.extract_location(contact_desc) if contact_desc else None
+        call_duration = duration if duration != "-" else "0"
+        
+        # Descripción estructurada
+        description_parts = []
+        if contact_desc and contact_desc.strip():
+            description_parts.append(f"Descripción: {contact_desc.strip()}")
+        if location:
+            description_parts.append(f"Ubicación: {location}")
+        if call_type and call_type != "-":
+            description_parts.append(f"Tipo llamada: {call_type}")
+        if cost and cost != "-":
+            description_parts.append(f"Costo: {cost}")
+        
+        full_description = " | ".join(description_parts) if description_parts else "Llamada"
+        
+        return ExtractedData(
+            source_file=filename,
+            phone_line=phone_line,
+            event_type=event_type,
+            timestamp=event_datetime,
+            direction=event_direction,
+            contact=contact_number,
+            description=full_description,
+            value=call_duration
+        )
+        
+    def process_message_no_date_line(self, line, current_date, current_line, bill_year, filename):
+        """Procesa línea de mensaje sin fecha explícita usando fecha persistente"""
+        match = self.message_no_date_pattern.match(line.strip())
+        if not match or not current_date:
+            return None
+        
+        time_str, am_pm, direction, contact_desc, msg_type, cost = match.groups()
+        
+        # Usar fecha persistente con hora específica
+        time_parts = time_str.split(':')
+        hour = int(time_parts[0])
+        minute = int(time_parts[1])
+        
+        if am_pm and am_pm.upper() == 'PM' and hour != 12:
+            hour += 12
+        elif am_pm and am_pm.upper() == 'AM' and hour == 12:
+            hour = 0
+            
+        event_datetime = current_date.replace(hour=hour, minute=minute)
+        
+        # Procesar igual que mensaje normal
+        phone_line = current_line if current_line != "Desconocida" else "N/A"
+        event_type = "Mensaje"
+        event_direction = "ENTRANTE" if direction.upper() == "IN" else "SALIENTE"
+        
+        # Extraer contacto
+        contact_number = "N/A"
+        description_clean = contact_desc
+        
+        if contact_desc:
+            phone_match = self.phone_pattern.search(contact_desc)
+            if phone_match:
+                contact_number = self.clean_phone_number(phone_match.group(0))
+                description_clean = contact_desc.replace(phone_match.group(0), "").strip()
+        
+        location = self.extract_location(description_clean)
+        
+        # Descripción estructurada
+        description_parts = []
+        if description_clean:
+            description_parts.append(f"Descripción: {description_clean}")
+        if location:
+            description_parts.append(f"Ubicación: {location}")
+        if msg_type:
+            description_parts.append(f"Tipo: {msg_type}")
+        if cost and cost != "-":
+            description_parts.append(f"Costo: {cost}")
+        
+        full_description = " | ".join(description_parts) if description_parts else f"Mensaje {msg_type}"
+        
+        return ExtractedData(
+            source_file=filename,
+            phone_line=phone_line,
+            event_type=event_type,
+            timestamp=event_datetime,
+            direction=event_direction,
+            contact=contact_number,
+            description=full_description,
+            value="1"
+        )
     
     def extract_bill_year(self, first_page_text):
         """Extrae el año de facturación del PDF"""
@@ -442,9 +589,21 @@ class RobustPDFExtractor:
                         record = None
                         
                         if current_section == "Llamada":
+                            # Intentar patrón con fecha explícita
                             record = self.process_call_line(line, last_known_date, current_line, bill_year, filename)
+                            
+                            # Si falla, intentar patrón sin fecha explícita
+                            if not record and last_known_date:
+                                record = self.process_call_no_date_line(line, last_known_date, current_line, bill_year, filename)
+                                
                         elif current_section == "Mensaje":
+                            # Intentar patrón con fecha explícita
                             record = self.process_message_line(line, last_known_date, current_line, bill_year, filename)
+                            
+                            # Si falla, intentar patrón sin fecha explícita  
+                            if not record and last_known_date:
+                                record = self.process_message_no_date_line(line, last_known_date, current_line, bill_year, filename)
+                                
                         elif current_section == "Datos":
                             record = self.process_data_line(line, last_known_date, current_line, bill_year, filename)
                         
@@ -452,12 +611,6 @@ class RobustPDFExtractor:
                         if record:
                             extracted_records.append(record)
                             logger.debug(f"Registro extraído: {record.event_type} - {record.timestamp}")
-                        
-                        # Para eventos sin fecha explícita, usar última fecha conocida
-                        elif last_known_date and (":" in line and ("AM" in line or "PM" in line)):
-                            # Intentar procesar como evento sin fecha explícita
-                            # (Implementar lógica adicional si es necesario)
-                            pass
             
             # Ordenar registros cronológicamente
             extracted_records.sort(key=lambda x: x.timestamp if x.timestamp else datetime.min)
