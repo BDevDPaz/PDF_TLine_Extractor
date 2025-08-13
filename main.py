@@ -59,18 +59,14 @@ def process_file():
         print("Warning: No Google API Key found, using regex-only mode")
     
     try:
-        # Usar procesador con modo privacidad
-        session_id = request.headers.get('X-Session-ID') or None
-        result = process_with_privacy_mode(filepath, pages, session_id)
+        # Usar procesador mejorado
+        from app.enhanced_regex_processor import extract_data_with_enhanced_regex
+        record_count = extract_data_with_enhanced_regex(filepath, pages)
         
-        if result['success']:
-            return jsonify({
-                'message': f'Procesamiento completado: {result["record_count"]} registros extraídos',
-                'method': result['method_used'],
-                'session_id': result['session_id']
-            })
+        if record_count > 0:
+            return jsonify({'message': f'Procesamiento completado: {record_count} registros extraídos'})
         else:
-            return jsonify({'error': f'Error en procesamiento: {result["error"]}'}), 500
+            return jsonify({'message': 'No se encontraron datos para extraer'}), 200
     except Exception as e:
         return jsonify({'error': f'Error en la IA: {str(e)}'}), 500
 
@@ -94,84 +90,51 @@ def chat_handler():
 
 @app.route('/api/get-data', methods=['GET'])
 def get_data():
-    """Endpoint con filtros avanzados y modo privacidad"""
+    """Obtener datos con formato simple que funciona"""
+    db = SessionLocal()
     try:
-        with AdvancedDataFilter() as filter_engine:
-            # Obtener parámetros de filtrado
-            filters = {}
-            if request.args.get('event_type'):
-                filters['event_type'] = request.args.get('event_type').split(',')
-            if request.args.get('direction'):
-                filters['direction'] = request.args.get('direction').split(',')
-            if request.args.get('phone_line'):
-                filters['phone_line'] = request.args.get('phone_line').split(',')
-            if request.args.get('date_from'):
-                filters['date_from'] = datetime.fromisoformat(request.args.get('date_from'))
-            if request.args.get('date_to'):
-                filters['date_to'] = datetime.fromisoformat(request.args.get('date_to'))
-            
-            # Obtener datos filtrados
-            data = filter_engine.get_filtered_data(filters)
-            
-            # Formatear respuesta sin exponer datos sensibles innecesariamente
-            results = []
-            for item in data:
-                result = {
-                    "id": item.id,
-                    "source_file": item.source_file,
-                    "phone_line": item.phone_line,
-                    "event_type": item.event_type,
-                    "timestamp": item.timestamp.isoformat() if item.timestamp else None,
-                    "direction": item.direction,
-                    "contact": item.contact,
-                    "description": item.description,
-                    "value": item.value
-                }
-                results.append(result)
-            
-            return jsonify({
-                'data': results,
-                'total_records': len(results),
-                'filters_applied': list(filters.keys())
-            })
+        data = db.query(ExtractedData).all()
+        results = []
+        for item in data:
+            result = {
+                "id": item.id,
+                "source_file": item.source_file,
+                "phone_line": item.phone_line,
+                "event_type": item.event_type,
+                "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "direction": item.direction,
+                "contact": item.contact,
+                "description": item.description,
+                "value": item.value
+            }
+            results.append(result)
+        return jsonify(results)
     except Exception as e:
         return jsonify({'error': f'Error obteniendo datos: {str(e)}'}), 500
+    finally:
+        db.close()
 
 @app.route('/api/export-csv', methods=['GET'])
 def export_csv():
-    """Export CSV con opciones de privacidad"""
+    """Export CSV simple que funciona"""
+    db = SessionLocal()
     try:
-        # Parámetros de privacidad
-        anonymize = request.args.get('anonymize', 'false').lower() == 'true'
+        query = db.query(ExtractedData)
+        df = pd.read_sql(query.statement, query.session.bind)
         
-        with AdvancedDataFilter() as filter_engine:
-            # Aplicar los mismos filtros que en get-data
-            filters = {}
-            if request.args.get('event_type'):
-                filters['event_type'] = request.args.get('event_type').split(',')
-            if request.args.get('direction'):
-                filters['direction'] = request.args.get('direction').split(',')
-            if request.args.get('phone_line'):
-                filters['phone_line'] = request.args.get('phone_line').split(',')
-            if request.args.get('date_from'):
-                filters['date_from'] = datetime.fromisoformat(request.args.get('date_from'))
-            if request.args.get('date_to'):
-                filters['date_to'] = datetime.fromisoformat(request.args.get('date_to'))
-            
-            data = filter_engine.get_filtered_data(filters)
-            
-            # Generar CSV con opciones de privacidad
-            csv_content = PrivateCSVExporter.generate_secure_csv(data, anonymize_contacts=anonymize)
-            
-            filename = f"datos_comunicacion_{'anonimo' if anonymize else 'completo'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            
-            return Response(
-                csv_content,
-                mimetype="text/csv",
-                headers={"Content-disposition": f"attachment; filename={filename}"}
-            )
+        # Formatear el timestamp para legibilidad en CSV
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        return Response(
+            df.to_csv(index=False),
+            mimetype="text/csv",
+            headers={"Content-disposition": "attachment; filename=datos_comunicacion.csv"}
+        )
     except Exception as e:
         return jsonify({'error': f'Error exportando CSV: {str(e)}'}), 500
+    finally:
+        db.close()
 
 @app.route('/api/chat-file', methods=['POST'])
 def chat_file_handler():

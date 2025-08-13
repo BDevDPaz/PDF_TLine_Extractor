@@ -298,8 +298,13 @@
     // Filter and export functionality
     document.getElementById('apply-filters').addEventListener('click', applyFilters);
     document.getElementById('clear-filters').addEventListener('click', clearFilters);
-    document.getElementById('export-filtered-csv').addEventListener('click', () => exportCSV(true));
-    document.getElementById('export-all-csv').addEventListener('click', () => exportCSV(false));
+    document.getElementById('export-filtered-csv').addEventListener('click', exportCSV);
+    document.getElementById('export-all-csv').addEventListener('click', exportCSV);
+    
+    // Quick filter on input
+    document.getElementById('quick-filter').addEventListener('input', (e) => {
+        if (gridApi) gridApi.setQuickFilter(e.target.value);
+    });
 
     async function handleFileUpload(event) {
         const file = event.target.files[0];
@@ -414,55 +419,56 @@
         const gridDiv = document.getElementById('data-grid');
         agGrid.createGrid(gridDiv, gridOptions);
         
-        document.getElementById('quick-filter').addEventListener('input', (e) => {
-            if (gridApi) gridApi.setQuickFilter(e.target.value);
-        });
-    }
-
-    async function loadData(filters = {}) {
-        if (!gridApi) initializeGrid();
-        
-        try {
-            const params = new URLSearchParams();
-            Object.keys(filters).forEach(key => {
-                if (filters[key] && filters[key] !== '') {
-                    if (Array.isArray(filters[key])) {
-                        params.append(key, filters[key].join(','));
-                    } else {
-                        params.append(key, filters[key]);
-                    }
-                }
+        if (document.getElementById('quick-filter')) {
+            document.getElementById('quick-filter').addEventListener('input', (e) => {
+                if (gridApi) gridApi.setQuickFilter(e.target.value);
             });
-            
-            const response = await fetch(`/api/get-data?${params}`);
-            const result = await response.json();
-            
-            if (result.data) {
-                gridApi.setRowData(result.data);
-                renderCharts(result.data);
-                updateStatistics(result.data);
-                document.getElementById('records-count').textContent = `${result.data.length} registros`;
-            }
-        } catch (error) {
-            console.error('Error loading data:', error);
         }
     }
 
-    // Filter and export functions
-    function applyFilters() {
-        currentFilters = {};
+    async function loadData() {
+        if (!gridApi) initializeGrid();
         
+        try {
+            const response = await fetch('/api/get-data');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            console.log('Data loaded:', data.length, 'records');
+            
+            if (Array.isArray(data) && data.length > 0) {
+                gridApi.setRowData(data);
+                renderCharts(data);
+                updateStatistics(data);
+                document.getElementById('records-count').textContent = `${data.length} registros`;
+            } else {
+                console.warn('No data found or invalid format');
+                document.getElementById('records-count').textContent = '0 registros';
+            }
+        } catch (error) {
+            console.error('Error loading data:', error);
+            document.getElementById('records-count').textContent = 'Error cargando datos';
+        }
+    }
+
+    // Simpler filter functions
+    function applyFilters() {
         const eventType = document.getElementById('filter-event-type').value;
         const direction = document.getElementById('filter-direction').value;
-        const dateFrom = document.getElementById('filter-date-from').value;
-        const dateTo = document.getElementById('filter-date-to').value;
+        const quickFilter = document.getElementById('quick-filter').value;
         
-        if (eventType) currentFilters.event_type = [eventType];
-        if (direction) currentFilters.direction = [direction];
-        if (dateFrom) currentFilters.date_from = dateFrom;
-        if (dateTo) currentFilters.date_to = dateTo;
-        
-        loadData(currentFilters);
+        if (gridApi) {
+            gridApi.setQuickFilter(quickFilter);
+            
+            // Apply column filters
+            const columnFilters = {};
+            if (eventType) columnFilters.event_type = { values: [eventType] };
+            if (direction) columnFilters.direction = { values: [direction] };
+            
+            gridApi.setColumnFilters(columnFilters);
+        }
     }
     
     function clearFilters() {
@@ -472,45 +478,14 @@
         document.getElementById('filter-date-to').value = '';
         document.getElementById('quick-filter').value = '';
         
-        currentFilters = {};
-        loadData();
+        if (gridApi) {
+            gridApi.setQuickFilter('');
+            gridApi.setColumnFilters({});
+        }
     }
     
-    async function exportCSV(filtered) {
-        try {
-            const params = new URLSearchParams();
-            const anonymize = document.getElementById('anonymize-export').checked;
-            params.append('anonymize', anonymize);
-            
-            if (filtered && Object.keys(currentFilters).length > 0) {
-                Object.keys(currentFilters).forEach(key => {
-                    if (currentFilters[key] && currentFilters[key] !== '') {
-                        if (Array.isArray(currentFilters[key])) {
-                            params.append(key, currentFilters[key].join(','));
-                        } else {
-                            params.append(key, currentFilters[key]);
-                        }
-                    }
-                });
-            }
-            
-            const response = await fetch(`/api/export-csv?${params}`);
-            
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = response.headers.get('Content-Disposition')?.split('filename=')[1] || 'datos.csv';
-                a.click();
-                window.URL.revokeObjectURL(url);
-            } else {
-                const error = await response.json();
-                alert('Error exportando CSV: ' + error.error);
-            }
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
+    function exportCSV() {
+        window.location.href = '/api/export-csv';
     }
 
     // Charts
@@ -783,6 +758,7 @@
     // Initialize
     lucide.createIcons();
     initializeGrid();
+    loadData();
 </script>
 </body>
 </html>
