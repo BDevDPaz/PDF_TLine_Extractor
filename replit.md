@@ -1,14 +1,15 @@
 # Overview
 
-This is an advanced AI-powered PDF data extraction and analysis application built with Flask that combines multiple extraction methods for optimal accuracy while maintaining complete user privacy. The system uses enhanced regex patterns (based on proven telecommunications bill processors) as the primary extraction method, with Google's Gemini AI as intelligent fallback. It processes telecommunications billing PDFs to extract call logs, message history, and data usage information with discrete processing that ensures user data privacy. The application features a mobile-style interface with privacy-focused design, advanced filtering system, anonymization options, discrete data visualization, AI chat assistant with direct PDF upload capability, and comprehensive privacy-safe analysis tools. Uses SQLite for data persistence with transaction-based integrity management and secure data handling.
+This is an AI-first document analysis application that automatically processes PDF files and presents data through intelligent visualizations. Built with Flask and powered by Google Gemini AI, the system eliminates manual processing steps by automatically extracting, analyzing, and visualizing data as soon as a PDF is uploaded. The application focuses on immediate visual insights with interactive dashboards, smart analytics, and an AI assistant for data queries. Features include automatic data extraction, real-time dashboard generation, intelligent filtering, CSV export capabilities, and conversational data analysis. The interface prioritizes data visualization over manual processing workflows.
 
 # User Preferences
 
 - **Preferred communication style**: Simple, everyday language
 - **Privacy Priority**: Complete privacy protection - user data must be processed discretely without developer visibility
 - **Quality over Sophistication**: Extraction accuracy more important than AI complexity
-- **Workflow Requirements**: Complete redesign from start to finish with focus on efficiency and user discretion
-- **Interface Requirements**: Discrete data access with advanced filtering and secure export options
+- **Workflow Requirements**: AI-driven automatic processing - eliminate redundant manual steps
+- **Interface Requirements**: Focus on data visualization and interactive analytics over manual processing
+- **User Experience Priority**: Show data insights immediately, not processing explanations
 
 # System Architecture
 

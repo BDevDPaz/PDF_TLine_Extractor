@@ -23,47 +23,105 @@
     <!-- Header -->
     <header class="bg-white shadow-sm">
         <div class="container mx-auto px-4 py-3">
-            <h1 class="text-2xl font-bold text-gray-800">📊 Analizador PDF con IA</h1>
-            <p class="text-sm text-gray-600">Extracción inteligente y chat con tus datos</p>
+            <h1 class="text-2xl font-bold text-gray-800">🤖 IA Analítica de Documentos</h1>
+            <p class="text-sm text-gray-600">Procesamiento automático y visualización inteligente</p>
         </div>
     </header>
 
     <!-- Main Content -->
     <main class="flex-1 container mx-auto px-4 py-4 mb-20">
-        <!-- Tab 1: Upload -->
+        <!-- Tab 1: AI Analysis -->
         <div id="tab-upload" class="tab-content active">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="upload-cloud"></i> Cargar PDF
-                </h2>
-                <input type="file" id="pdf-input" accept=".pdf" 
-                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                <div id="upload-status" class="mt-4"></div>
-            </div>
-        </div>
-
-        <!-- Tab 2: Process -->
-        <div id="tab-process" class="tab-content">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="cpu"></i> Procesar con IA
-                </h2>
-                <div id="pdf-viewer" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
-                    <!-- PDF pages will render here -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg shadow-lg p-8">
+                <div class="text-center mb-6">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+                        <i data-lucide="brain" class="w-8 h-8 text-white"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Análisis Automático con IA</h2>
+                    <p class="text-gray-600">La IA procesará tu PDF y mostrará los datos visualizados instantáneamente</p>
                 </div>
-                <button id="process-button" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:bg-gray-400">
-                    <i data-lucide="sparkles"></i> Extraer con IA
-                </button>
-                <div id="process-status" class="mt-4"></div>
+                
+                <div class="bg-white rounded-lg border-2 border-dashed border-blue-200 p-8 text-center hover:border-blue-400 transition-colors" id="drop-zone">
+                    <i data-lucide="upload" class="mx-auto mb-4 w-12 h-12 text-blue-500"></i>
+                    <p class="text-lg font-medium text-gray-700 mb-2">Arrastra tu PDF aquí</p>
+                    <p class="text-gray-500 mb-4">o haz clic para seleccionar</p>
+                    <input type="file" id="pdf-input" accept=".pdf" class="hidden">
+                    <button onclick="document.getElementById('pdf-input').click()" 
+                            class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                        Seleccionar PDF
+                    </button>
+                </div>
+                
+                <!-- AI Processing Indicator -->
+                <div id="ai-processing" class="hidden mt-6 bg-white rounded-lg p-6 border border-blue-200">
+                    <div class="flex items-center mb-4">
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                        <h3 class="text-lg font-semibold text-gray-800">IA Procesando...</h3>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-sm">
+                            <span id="step-upload" class="text-gray-500">1. Cargando archivo</span>
+                            <span id="progress-upload" class="text-blue-600">●</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span id="step-extract" class="text-gray-400">2. Extrayendo datos</span>
+                            <span id="progress-extract" class="text-gray-300">○</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span id="step-visualize" class="text-gray-400">3. Generando visualizaciones</span>
+                            <span id="progress-visualize" class="text-gray-300">○</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Tab 3: Data -->
+        <!-- Tab 2: Data Dashboard -->
         <div id="tab-data" class="tab-content">
             <div class="bg-white rounded-lg shadow-md p-6">
                 <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="table"></i> Datos Extraídos
+                    <i data-lucide="layout-dashboard"></i> Dashboard de Datos
                 </h2>
+                
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-blue-600 font-medium">Total Registros</p>
+                                <p class="text-2xl font-bold text-blue-800" id="stat-total-records">0</p>
+                            </div>
+                            <i data-lucide="database" class="w-8 h-8 text-blue-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-green-600 font-medium">Llamadas</p>
+                                <p class="text-2xl font-bold text-green-800" id="stat-calls">0</p>
+                            </div>
+                            <i data-lucide="phone" class="w-8 h-8 text-green-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-purple-600 font-medium">Mensajes</p>
+                                <p class="text-2xl font-bold text-purple-800" id="stat-messages">0</p>
+                            </div>
+                            <i data-lucide="message-circle" class="w-8 h-8 text-purple-500"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-r from-orange-50 to-orange-100 p-4 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-orange-600 font-medium">Datos</p>
+                                <p class="text-2xl font-bold text-orange-800" id="stat-data">0</p>
+                            </div>
+                            <i data-lucide="wifi" class="w-8 h-8 text-orange-500"></i>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Filtros Avanzados -->
                 <div class="bg-gray-50 p-4 rounded-lg mb-4">
@@ -132,11 +190,11 @@
             </div>
         </div>
 
-        <!-- Tab 4: Charts -->
+        <!-- Tab 3: Visual Analytics -->
         <div id="tab-charts" class="tab-content">
             <div class="bg-white rounded-lg shadow-md p-6">
                 <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="bar-chart-3"></i> Análisis Visual
+                    <i data-lucide="trending-up"></i> Análisis Visual Inteligente
                 </h2>
                 
                 <!-- Resumen de Privacidad -->
@@ -194,7 +252,7 @@
         <div id="tab-chat" class="tab-content">
             <div class="bg-white rounded-lg shadow-md p-6 h-[600px] flex flex-col">
                 <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="message-circle"></i> Chat con IA
+                    <i data-lucide="bot"></i> Asistente IA para Análisis
                 </h2>
                 <div id="chat-messages" class="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4">
                     <div class="text-gray-500 text-center py-8">
@@ -238,24 +296,20 @@
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
         <div class="flex justify-around">
             <button class="nav-btn active flex-1 py-3 text-center" data-tab="upload">
-                <i data-lucide="upload" class="mx-auto mb-1"></i>
-                <span class="text-xs">Cargar</span>
-            </button>
-            <button class="nav-btn flex-1 py-3 text-center" data-tab="process">
-                <i data-lucide="cpu" class="mx-auto mb-1"></i>
-                <span class="text-xs">Procesar</span>
+                <i data-lucide="brain" class="mx-auto mb-1"></i>
+                <span class="text-xs">IA</span>
             </button>
             <button class="nav-btn flex-1 py-3 text-center" data-tab="data">
-                <i data-lucide="table" class="mx-auto mb-1"></i>
-                <span class="text-xs">Datos</span>
+                <i data-lucide="layout-dashboard" class="mx-auto mb-1"></i>
+                <span class="text-xs">Dashboard</span>
             </button>
             <button class="nav-btn flex-1 py-3 text-center" data-tab="charts">
-                <i data-lucide="bar-chart-3" class="mx-auto mb-1"></i>
-                <span class="text-xs">Gráficos</span>
+                <i data-lucide="trending-up" class="mx-auto mb-1"></i>
+                <span class="text-xs">Analytics</span>
             </button>
             <button class="nav-btn flex-1 py-3 text-center" data-tab="chat">
-                <i data-lucide="message-circle" class="mx-auto mb-1"></i>
-                <span class="text-xs">Chat</span>
+                <i data-lucide="bot" class="mx-auto mb-1"></i>
+                <span class="text-xs">Asistente</span>
             </button>
         </div>
     </nav>
@@ -291,9 +345,8 @@
         });
     });
 
-    // Upload functionality
+    // Auto AI processing functionality
     document.getElementById('pdf-input').addEventListener('change', handleFileUpload);
-    document.getElementById('process-button').addEventListener('click', handleProcess);
     
     // Filter and export functionality
     document.getElementById('apply-filters').addEventListener('click', applyFilters);
@@ -310,7 +363,10 @@
         const file = event.target.files[0];
         if (!file) return;
 
-        setStatus('upload-status', 'Subiendo archivo...', 'loading');
+        // Show AI processing indicator
+        document.getElementById('ai-processing').classList.remove('hidden');
+        updateProcessingStep('upload', '1. Cargando archivo', 'completed');
+
         const formData = new FormData();
         formData.append('pdfFile', file);
 
@@ -320,13 +376,52 @@
             if (!response.ok) throw new Error(result.error);
             
             currentFilename = result.filename;
-            setStatus('upload-status', '✅ ' + result.message, 'success');
+            updateProcessingStep('extract', '2. Extrayendo datos con IA', 'processing');
             
-            // Switch to process tab
-            document.querySelector('[data-tab="process"]').click();
-            renderPdf(result.filename);
+            // Auto-process with AI
+            const processResponse = await fetch('/api/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    filename: currentFilename, 
+                    pages: 'all' 
+                })
+            });
+
+            if (processResponse.ok) {
+                updateProcessingStep('extract', '2. Datos extraídos exitosamente', 'completed');
+                updateProcessingStep('visualize', '3. Generando visualizaciones', 'processing');
+                
+                // Load data and switch to dashboard
+                await loadData();
+                updateProcessingStep('visualize', '3. Visualizaciones completadas', 'completed');
+                
+                // Hide processing and switch to dashboard
+                setTimeout(() => {
+                    document.getElementById('ai-processing').classList.add('hidden');
+                    document.querySelector('[data-tab="data"]').click();
+                }, 1500);
+            }
         } catch (error) {
-            setStatus('upload-status', '❌ ' + error.message, 'error');
+            document.getElementById('ai-processing').classList.add('hidden');
+        }
+    }
+
+    function updateProcessingStep(step, message, status) {
+        const stepElement = document.getElementById(`step-${step}`);
+        const progressElement = document.getElementById(`progress-${step}`);
+        
+        if (stepElement) stepElement.textContent = message;
+        if (progressElement) {
+            if (status === 'completed') {
+                progressElement.textContent = '✓';
+                progressElement.className = 'text-green-600';
+                stepElement.className = 'text-green-700';
+            } else if (status === 'processing') {
+                progressElement.textContent = '●';
+                progressElement.className = 'text-blue-600';
+                stepElement.className = 'text-blue-700';
+            }
         }
     }
 
@@ -398,7 +493,7 @@
         }
     }
 
-    // Data grid
+    // Data grid initialization
     function initializeGrid() {
         const columnDefs = [
             { field: "phone_line", headerName: "Línea", filter: true, width: 150 },
@@ -412,23 +507,25 @@
         
         const gridOptions = {
             columnDefs: columnDefs,
-            defaultColDef: { sortable: true, resizable: true },
-            onGridReady: (params) => { gridApi = params.api; }
+            defaultColDef: { sortable: true, resizable: true, filter: true },
+            onGridReady: (params) => { 
+                gridApi = params.api;
+                console.log('Grid initialized successfully');
+            }
         };
         
         const gridDiv = document.getElementById('data-grid');
-        agGrid.createGrid(gridDiv, gridOptions);
-        
-        if (document.getElementById('quick-filter')) {
-            document.getElementById('quick-filter').addEventListener('input', (e) => {
-                if (gridApi) gridApi.setQuickFilter(e.target.value);
-            });
+        if (gridDiv && !gridApi) {
+            try {
+                const gridInstance = agGrid.createGrid(gridDiv, gridOptions);
+                console.log('AG-Grid created:', gridInstance);
+            } catch (error) {
+                console.error('Error creating grid:', error);
+            }
         }
     }
 
     async function loadData() {
-        if (!gridApi) initializeGrid();
-        
         try {
             const response = await fetch('/api/get-data');
             if (!response.ok) {
@@ -439,17 +536,41 @@
             console.log('Data loaded:', data.length, 'records');
             
             if (Array.isArray(data) && data.length > 0) {
-                gridApi.setRowData(data);
+                // Ensure grid is initialized
+                if (!gridApi) {
+                    initializeGrid();
+                    // Wait a bit for grid to initialize
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                // Set data if grid is ready
+                if (gridApi && typeof gridApi.setRowData === 'function') {
+                    gridApi.setRowData(data);
+                } else {
+                    console.warn('Grid API not ready, retrying...');
+                    setTimeout(() => loadData(), 500);
+                    return;
+                }
+                
                 renderCharts(data);
                 updateStatistics(data);
-                document.getElementById('records-count').textContent = `${data.length} registros`;
+                const recordsElement = document.getElementById('records-count');
+                if (recordsElement) {
+                    recordsElement.textContent = `${data.length} registros`;
+                }
             } else {
                 console.warn('No data found or invalid format');
-                document.getElementById('records-count').textContent = '0 registros';
+                const recordsElement = document.getElementById('records-count');
+                if (recordsElement) {
+                    recordsElement.textContent = '0 registros';
+                }
             }
         } catch (error) {
             console.error('Error loading data:', error);
-            document.getElementById('records-count').textContent = 'Error cargando datos';
+            const recordsElement = document.getElementById('records-count');
+            if (recordsElement) {
+                recordsElement.textContent = 'Error cargando datos';
+            }
         }
     }
 
@@ -756,9 +877,12 @@
     }
 
     // Initialize
-    lucide.createIcons();
-    initializeGrid();
-    loadData();
+    document.addEventListener('DOMContentLoaded', function() {
+        lucide.createIcons();
+        initializeGrid();
+        // Load data after a short delay to ensure grid is ready
+        setTimeout(() => loadData(), 300);
+    });
 </script>
 </body>
 </html>
