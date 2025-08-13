@@ -44,7 +44,7 @@ class TMobileParser:
             combined_text = ""
             for page_num in range(start_page, min(start_page + 8, end_page)):
                 try:
-                    page_text = doc[page_num].get_text("text")
+                    page_text = doc[page_num].get_text()
                     if "USAGE DETAILS" in page_text or any(kw in page_text for kw in ["TALK", "IN (", "OUT ("]):
                         combined_text += page_text + "\n"
                         logging.info(f"📄 Procesando página {page_num + 1}")
@@ -130,39 +130,51 @@ class TMobileParser:
                 logging.info(f"📅 Nueva fecha: {current_date.strftime('%Y-%m-%d')}")
                 continue
             
+            # Detectar línea telefónica para todos los eventos siguientes
+            if not current_line_obj and self.detected_lines:
+                # Si no tenemos línea actual, usar la primera disponible
+                current_line_obj = list(self.detected_lines.values())[0]
+                logging.info(f"📱 Usando línea por defecto: {current_line_obj.phone_number}")
+            
             # Detectar eventos por hora (formato multi-línea)
             time_match = re.match(r'^(\d{1,2}:\d{2}\s+[AP]M)$', line_clean)
             if time_match and current_line_obj and current_date and i + 4 < len(lines):
                 time_str = time_match.group(1)
+                logging.info(f"🕐 HORA DETECTADA: {time_str} (línea {i})")
                 
                 # Buscar patrón multi-línea en siguientes líneas
                 for j in range(1, min(6, len(lines) - i)):
                     next_line = lines[i + j].strip()
                     direction_match = re.match(r'^(IN|OUT)\s+\((\d{3})\)\s*(\d{3}-\d{4})$', next_line)
                     
-                    if direction_match and i + j + 3 < len(lines):
+                    if direction_match:
+                        logging.info(f"📞 DIRECCIÓN DETECTADA: {next_line} (línea {i+j})")
                         direction = direction_match.group(1)
                         area_code = direction_match.group(2)
                         phone_number = direction_match.group(3)
                         contact_number = f"({area_code}) {phone_number}"
                         
-                        description = lines[i + j + 1].strip()
-                        event_type = lines[i + j + 2].strip()
-                        
-                        # Procesar llamada si tiene duración
-                        try:
-                            duration_line = lines[i + j + 3].strip()
-                            if duration_line.isdigit():
-                                duration = int(duration_line)
-                                self._create_call_event(time_str, direction, contact_number, description, duration, current_line_obj, current_date)
+                        if i + j + 3 < len(lines):
+                            description = lines[i + j + 1].strip()
+                            event_type = lines[i + j + 2].strip()
+                            logging.info(f"📝 DESC/TIPO: '{description}' / '{event_type}'")
+                            
+                            # Procesar llamada si tiene duración
+                            try:
+                                duration_line = lines[i + j + 3].strip()
+                                if duration_line.isdigit():
+                                    duration = int(duration_line)
+                                    logging.info(f"⏱️  DURACIÓN: {duration} min")
+                                    self._create_call_event(time_str, direction, contact_number, description, duration, current_line_obj, current_date)
+                                    break
+                            except Exception as e:
+                                logging.debug(f"Error en duración: {e}")
+                            
+                            # Procesar texto si es TXT
+                            if 'TXT' in description or event_type == 'TXT':
+                                logging.info(f"💬 TEXTO DETECTADO")
+                                self._create_text_event(time_str, direction, contact_number, description, current_line_obj, current_date)
                                 break
-                        except:
-                            pass
-                        
-                        # Procesar texto si es TXT
-                        if 'TXT' in description or event_type == 'TXT':
-                            self._create_text_event(time_str, direction, contact_number, description, current_line_obj, current_date)
-                            break
     
     def _create_call_event(self, time_str, direction, contact_number, description, duration, line_obj, date):
         """Crear evento de llamada"""

@@ -23,7 +23,8 @@ class CustomJSONEncoder(json.JSONEncoder):
 
 # --- Inicialización de la App ---
 app = Flask(__name__)
-app.json.default = lambda o: o.isoformat() if isinstance(o, (datetime, date)) else None
+# Configurar encoder JSON personalizado
+app.json_encoder = CustomJSONEncoder
 CORS(app) # Permitir peticiones desde el frontend de Vite
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
