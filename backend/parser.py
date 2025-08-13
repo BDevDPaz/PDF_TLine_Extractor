@@ -126,7 +126,7 @@ class PDFParser:
     def _brute_force_extraction(self, text, event_type):
         """Estrategia 3: Extracción por fuerza bruta como respaldo"""
         try:
-            if event_type == "TALK" and "min" in text:
+            if self.current_line_db and event_type == "TALK" and "min" in text:
                 # Buscar patrones de número y duración agresivamente
                 phone_pattern = r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
                 duration_pattern = r'\b(\d+)\s*min\b'
@@ -149,20 +149,137 @@ class PDFParser:
                     logging.info(f"🔥 FUERZA BRUTA: Llamada rescatada - {phone_match.group()}")
         except Exception as e:
             logging.debug(f"🔄 Fuerza bruta falló para: {text[:30]}... | {e}")
+    
+    def _extract_tabular_data(self, text):
+        """Estrategia 4: Extracción de datos en formato tabular moderno"""
+        try:
+            lines = text.strip().split('\n')
+            
+            # Buscar línea principal primero
+            for line in lines:
+                if "Línea Principal" in line or "Principal:" in line:
+                    phone_match = re.search(r'\((\d{3})\)\s*(\d{3})-(\d{4})', line)
+                    if phone_match:
+                        phone_number = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+                        # Crear línea si no existe
+                        existing_line = self.session.query(Line).filter_by(phone_number=phone_number).first()
+                        if not existing_line:
+                            new_line = Line(phone_number=phone_number)
+                            self.session.add(new_line)
+                            self.session.flush()
+                            self.current_line_db = new_line
+                        else:
+                            self.current_line_db = existing_line
+                        logging.info(f"📱 LÍNEA DETECTADA: {phone_number}")
+            
+            # Procesar formato vertical: agrupa cada 6 líneas como un evento
+            i = 0
+            while i < len(lines):
+                if lines[i] and re.match(r'\d{1,2}/\w{3}/\d{4}', lines[i]):  # Detectar fechas
+                    try:
+                        if i + 5 < len(lines):
+                            fecha = lines[i].strip()
+                            hora = lines[i + 1].strip() 
+                            evento = lines[i + 2].strip()
+                            tipo = lines[i + 3].strip()
+                            contacto = lines[i + 4].strip()
+                            duracion_cantidad = lines[i + 5].strip()
+                            
+                            logging.debug(f"🔍 Procesando evento: {fecha} {hora} {evento} {tipo} {contacto} {duracion_cantidad}")
+                            
+                            # Parsear fecha
+                            day, month_str, year = fecha.split('/')
+                            month = MONTH_MAP.get(month_str, 7)  # Default July
+                            timestamp = datetime(int(year), month, int(day))
+                            
+                            if self.current_line_db and evento in ["Llamada", "Mensaje", "Datos"]:
+                                if evento == "Llamada":
+                                    # Extraer duración en formato mm:ss
+                                    duration_match = re.search(r'(\d+):(\d+)', duracion_cantidad)
+                                    if duration_match:
+                                        minutes = int(duration_match.group(1)) * 60 + int(duration_match.group(2))
+                                        call = CallEvent(
+                                            line_id=self.current_line_db.id,
+                                            timestamp=timestamp,
+                                            counterpart_number=contacto,
+                                            description=f"{tipo} - {duracion_cantidad}",
+                                            call_type=tipo,
+                                            duration_minutes=minutes
+                                        )
+                                        self.session.add(call)
+                                        self.total_extracted += 1
+                                        self.extraction_stats['calls'] += 1
+                                        logging.info(f"📞 LLAMADA: {contacto} - {minutes} segundos")
+                                
+                                elif evento == "Mensaje":
+                                    text_event = TextEvent(
+                                        line_id=self.current_line_db.id,
+                                        timestamp=timestamp,
+                                        counterpart_number=contacto,
+                                        destination=contacto,
+                                        message_type=tipo
+                                    )
+                                    self.session.add(text_event)
+                                    self.total_extracted += 1
+                                    self.extraction_stats['texts'] += 1
+                                    logging.info(f"💬 MENSAJE: {contacto}")
+                                
+                                elif evento == "Datos":
+                                    mb_match = re.search(r'([\d.]+)\s*MB', duracion_cantidad)
+                                    if mb_match:
+                                        data_event = DataEvent(
+                                            line_id=self.current_line_db.id,
+                                            date=timestamp.date(),
+                                            usage_mb=float(mb_match.group(1))
+                                        )
+                                        self.session.add(data_event)
+                                        self.total_extracted += 1
+                                        self.extraction_stats['data'] += 1
+                                        logging.info(f"📊 DATOS: {mb_match.group(1)} MB")
+                            
+                            i += 6  # Saltar a siguiente evento
+                        else:
+                            i += 1
+                    except Exception as e:
+                        logging.debug(f"⚠️ Error procesando evento vertical: {e}")
+                        i += 1
+                else:
+                    i += 1
+                            
+        except Exception as e:
+            logging.error(f"❌ Error en extracción tabular: {e}")
 
     def run_extraction(self):
         logging.info("🚀 ESTRATEGIA HÍBRIDA: Iniciando extracción ultra-agresiva")
         
-        start_page = 3  # Ajustado para capturar más datos
-        end_page = len(self.doc) - 1  # Más agresivo en el rango
-        
-        # Limpiar datos previos para esta sesión
-        if self.current_line_db:
-            logging.info(f"🔄 Limpiando datos previos para línea {self.current_line_db.phone_number}")
+        # Estrategia flexible: primero intentar extracción tabular moderna
+        try:
+            # Extraer todo el texto del documento
+            all_text = ""
+            for page_num in range(len(self.doc)):
+                page_text = self.doc[page_num].get_text("text")
+                all_text += page_text + "\n"
+            
+            # Intentar extracción tabular moderna primero
+            logging.info("🎯 ESTRATEGIA 4: Extracción tabular moderna")
+            self._extract_tabular_data(all_text)
+            
+            # Si no hay resultados, usar estrategia original
+            if self.total_extracted == 0:
+                logging.info("🔄 Fallback a estrategia original")
+                start_page = 3  # Ajustado para capturar más datos
+                end_page = len(self.doc) - 1  # Más agresivo en el rango
+                
+                # Limpiar datos previos para esta sesión
+                if self.current_line_db:
+                    logging.info(f"🔄 Limpiando datos previos para línea {self.current_line_db.phone_number}")
 
-        for page_num in range(start_page - 1, end_page):
-            logging.info(f"📄 Procesando página {page_num + 1}/{end_page}")
-            self._parse_page(self.doc[page_num])
+                for page_num in range(max(0, start_page - 1), min(len(self.doc), end_page)):
+                    logging.info(f"📄 Procesando página {page_num + 1}/{len(self.doc)}")
+                    self._parse_page(self.doc[page_num])
+
+        except Exception as e:
+            logging.error(f"❌ Error durante extracción: {e}")
 
         try:
             self.session.commit()
