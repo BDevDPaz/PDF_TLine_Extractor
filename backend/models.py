@@ -59,11 +59,12 @@ class DataEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     line_id = Column(Integer, ForeignKey("lines.id"))
     date = Column(DateTime)
-    timestamp = Column(DateTime)
-    data_type = Column(String)
-    amount_mb = Column(Float)
-    usage_mb = Column(Float)
-    description = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    data_type = Column(String, default="Unknown")
+    amount_mb = Column(Float, default=0.0)
+    usage_mb = Column(Float, default=0.0)
+    description = Column(Text, default="")
+    ai_category = Column(String, default="Desconocido")
 
     # Relación
     line = relationship("Line", back_populates="data_events")
