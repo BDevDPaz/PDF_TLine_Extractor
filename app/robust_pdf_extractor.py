@@ -26,18 +26,24 @@ class RobustPDFExtractor:
         self.phone_pattern = re.compile(r'\(\d{3}\)\s*\d{3}-\d{4}')
         self.date_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?!\d)', re.IGNORECASE)
         
-        # Patrones para llamadas con máxima precisión
+        # Patrones para llamadas con captura de ubicación y máxima precisión
         self.call_pattern = re.compile(
             r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+'  # Fecha
-            r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora
-            r'(IN|OUT)\s+'                                                         # Dirección
+            r'(\d{1,2}:\d{2})\s*(AM|PM)\s+'                                        # Hora 12h con AM/PM
+            r'(IN|OUT)\s+'                                                         # Tipo: Entrante/Saliente
             r'((?:\(\d{3}\)\s*\d{3}-\d{4})|(?:\d{10,15})|(?:[\w\s\./\(\)\-\:]+?))\s+'  # Contacto
-            r'(.*?)\s+'                                                            # Descripción
-            r'([A-ZCHFWG]|-)\s+'                                                   # Tipo
-            r'(\d+|-)\s*'                                                          # Duración/cantidad
-            r'(-|\$[\d\.]+)?\s*$',                                                # Costo
+            r'(.*?)\s+'                                                            # Descripción/Ubicación
+            r'([A-ZCHFWG]|-)\s+'                                                   # Código tipo llamada
+            r'(\d+|-)\s*'                                                          # Duración en minutos
+            r'(-|\$[\d\.]+)?\s*$',                                                # Costo opcional
             re.IGNORECASE
         )
+        
+        # Patrón alternativo para detectar hora en formato 24h
+        self.time_24h_pattern = re.compile(r'(\d{1,2}):(\d{2})(?:\s*(AM|PM))?')
+        
+        # Patrón para detectar ubicaciones/ciudades
+        self.location_pattern = re.compile(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[,/]\s*([A-Z]{2})')  # Ciudad, Estado
         
         # Patrones para mensajes con máxima precisión
         self.message_pattern = re.compile(
@@ -71,7 +77,7 @@ class RobustPDFExtractor:
     def parse_date_time(self, month_str, day_str, time_str, am_pm, year):
         """
         Convierte fecha en formato específico a datetime
-        Maneja formato: 'Mar 15 3:45 PM' con año de facturación
+        Maneja múltiples formatos: 'Mar 15 3:45 PM', '15:45', '3:45 AM'
         """
         try:
             month_num = self.month_map.get(month_str[:3].title())
@@ -80,22 +86,43 @@ class RobustPDFExtractor:
             
             day = int(day_str)
             
-            # Parsear hora
+            # Parsear hora con flexibilidad para 12h y 24h
             time_parts = time_str.split(':')
             hour = int(time_parts[0])
-            minute = int(time_parts[1])
+            minute = int(time_parts[1]) if len(time_parts) > 1 else 0
             
-            # Convertir a formato 24 horas
-            if am_pm.upper() == 'PM' and hour != 12:
-                hour += 12
-            elif am_pm.upper() == 'AM' and hour == 12:
-                hour = 0
+            # Manejar formato 12 horas con AM/PM
+            if am_pm:
+                if am_pm.upper() == 'PM' and hour != 12:
+                    hour += 12
+                elif am_pm.upper() == 'AM' and hour == 12:
+                    hour = 0
+            # Si no hay AM/PM, asumir formato 24h (verificar rango válido)
+            elif hour > 12:
+                pass  # Ya está en formato 24h
             
+            # Validar rango de hora
+            if not (0 <= hour <= 23) or not (0 <= minute <= 59):
+                return None
+                
             return datetime(year, month_num, day, hour, minute)
         
         except (ValueError, IndexError) as e:
             logger.warning(f"Error parsing date/time: {month_str} {day_str} {time_str} {am_pm} - {e}")
             return None
+    
+    def extract_location(self, description_text):
+        """Extrae ubicación/ciudad de la descripción si está presente"""
+        if not description_text:
+            return None
+        
+        location_match = self.location_pattern.search(description_text)
+        if location_match:
+            city = location_match.group(1)
+            state = location_match.group(2)
+            return f"{city}, {state}"
+        
+        return None
     
     def extract_two_column_text(self, page):
         """
@@ -159,102 +186,179 @@ class RobustPDFExtractor:
         return current_section, current_line
     
     def process_call_line(self, line, current_date, current_line, bill_year, filename):
-        """Procesa línea de llamada con máxima precisión"""
+        """Procesa línea de llamada capturando todos los campos clave"""
         match = self.call_pattern.match(line.strip())
         if not match:
             return None
         
         month_str, day_str, time_str, am_pm, direction, contact_raw, description, call_type, duration, cost = match.groups()
         
-        # Parsear fecha y hora
+        # 1. FECHA Y HORA - Parseo preciso con múltiples formatos
         event_datetime = self.parse_date_time(month_str, day_str, time_str, am_pm, bill_year)
         if not event_datetime:
             return None
         
-        # Limpiar contacto
-        contact = self.clean_phone_number(contact_raw) if contact_raw else "N/A"
+        # 2. LÍNEA TELEFÓNICA - Ya viene del contexto
+        phone_line = current_line if current_line != "Desconocida" else "N/A"
         
-        # Crear descripción completa
-        full_description = f"{description.strip()} - Tipo: {call_type} - Duración: {duration} min"
+        # 3. EVENTO - Tipo fijo: Llamada
+        event_type = "Llamada"
+        
+        # 4. TIPO - Entrante o Saliente
+        event_direction = "ENTRANTE" if direction.upper() == "IN" else "SALIENTE"
+        
+        # 5. CONTACTO - Número telefónico limpiado
+        contact_number = "N/A"
+        if contact_raw and contact_raw.strip():
+            cleaned_contact = self.clean_phone_number(contact_raw)
+            if cleaned_contact:
+                contact_number = cleaned_contact
+        
+        # 6. LUGAR - Extraer ubicación de la descripción
+        location = self.extract_location(description) if description else None
+        
+        # 7. DURACIÓN - En minutos
+        call_duration = duration if duration and duration != "-" else "0"
+        
+        # Crear descripción estructurada con todos los campos
+        description_parts = []
+        if description and description.strip():
+            description_parts.append(f"Descripción: {description.strip()}")
+        if location:
+            description_parts.append(f"Ubicación: {location}")
+        if call_type and call_type != "-":
+            description_parts.append(f"Tipo llamada: {call_type}")
         if cost and cost != "-":
-            full_description += f" - Costo: {cost}"
+            description_parts.append(f"Costo: {cost}")
+        
+        full_description = " | ".join(description_parts) if description_parts else "Llamada"
         
         return ExtractedData(
             source_file=filename,
-            phone_line=current_line,
-            event_type="Llamada",
+            phone_line=phone_line,
+            event_type=event_type,
             timestamp=event_datetime,
-            direction=direction.upper(),
-            contact=contact,
-            description=full_description.strip(),
-            value=duration if duration != "-" else "0"
+            direction=event_direction,
+            contact=contact_number,
+            description=full_description,
+            value=call_duration
         )
     
     def process_message_line(self, line, current_date, current_line, bill_year, filename):
-        """Procesa línea de mensaje con máxima precisión"""
+        """Procesa línea de mensaje capturando todos los campos clave"""
         match = self.message_pattern.match(line.strip())
         if not match:
             return None
         
         month_str, day_str, time_str, am_pm, direction, contact_desc, msg_type, cost = match.groups()
         
-        # Parsear fecha y hora
+        # 1. FECHA Y HORA - Parseo preciso
         event_datetime = self.parse_date_time(month_str, day_str, time_str, am_pm, bill_year)
         if not event_datetime:
             return None
         
-        # Extraer contacto de la descripción
-        contact = "N/A"
-        description = contact_desc
+        # 2. LÍNEA TELEFÓNICA
+        phone_line = current_line if current_line != "Desconocida" else "N/A"
+        
+        # 3. EVENTO - Tipo fijo: Mensaje
+        event_type = "Mensaje"
+        
+        # 4. TIPO - Entrante o Saliente
+        event_direction = "ENTRANTE" if direction.upper() == "IN" else "SALIENTE"
+        
+        # 5. CONTACTO - Extraer número telefónico
+        contact_number = "N/A"
+        description_clean = contact_desc
         
         # Buscar número telefónico en la descripción
         phone_in_desc = self.phone_pattern.search(contact_desc)
         if phone_in_desc:
-            contact = self.clean_phone_number(phone_in_desc.group(0))
+            contact_number = self.clean_phone_number(phone_in_desc.group(0))
+            # Limpiar descripción removiendo el número
+            description_clean = contact_desc.replace(phone_in_desc.group(0), "").strip()
         
-        # Crear descripción completa
-        full_description = f"{description.strip()} - Tipo: {msg_type}"
+        # 6. LUGAR - Extraer ubicación si está presente
+        location = self.extract_location(description_clean)
+        
+        # 7. CANTIDAD - Siempre 1 para mensajes
+        message_count = "1"
+        
+        # Crear descripción estructurada
+        description_parts = []
+        if description_clean:
+            description_parts.append(f"Descripción: {description_clean}")
+        if location:
+            description_parts.append(f"Ubicación: {location}")
+        if msg_type:
+            description_parts.append(f"Tipo: {msg_type}")
         if cost and cost != "-":
-            full_description += f" - Costo: {cost}"
+            description_parts.append(f"Costo: {cost}")
+        
+        full_description = " | ".join(description_parts) if description_parts else f"Mensaje {msg_type}"
         
         return ExtractedData(
             source_file=filename,
-            phone_line=current_line,
-            event_type="Mensaje",
+            phone_line=phone_line,
+            event_type=event_type,
             timestamp=event_datetime,
-            direction=direction.upper(),
-            contact=contact,
-            description=full_description.strip(),
-            value="1"
+            direction=event_direction,
+            contact=contact_number,
+            description=full_description,
+            value=message_count
         )
     
     def process_data_line(self, line, current_date, current_line, bill_year, filename):
-        """Procesa línea de uso de datos con máxima precisión"""
+        """Procesa línea de uso de datos capturando todos los campos clave"""
         match = self.data_pattern.match(line.strip())
         if not match:
             return None
         
         month_str, day_str, time_str, am_pm, description, data_amount, cost = match.groups()
         
-        # Parsear fecha y hora
+        # 1. FECHA Y HORA - Parseo preciso
         event_datetime = self.parse_date_time(month_str, day_str, time_str, am_pm, bill_year)
         if not event_datetime:
             return None
         
-        # Crear descripción completa
-        full_description = f"{description.strip()} - Cantidad: {data_amount}"
+        # 2. LÍNEA TELEFÓNICA
+        phone_line = current_line if current_line != "Desconocida" else "N/A"
+        
+        # 3. EVENTO - Tipo fijo: Datos
+        event_type = "Datos"
+        
+        # 4. TIPO - Siempre consumo (saliente)
+        event_direction = "CONSUMO"
+        
+        # 5. CONTACTO - No aplica para uso de datos
+        contact_number = "N/A"
+        
+        # 6. LUGAR - Extraer ubicación si está presente
+        location = self.extract_location(description)
+        
+        # 7. CANTIDAD - Cantidad de datos usados (MB, GB, KB)
+        data_quantity = data_amount if data_amount else "0 MB"
+        
+        # Crear descripción estructurada
+        description_parts = []
+        if description and description.strip():
+            description_parts.append(f"Actividad: {description.strip()}")
+        if location:
+            description_parts.append(f"Ubicación: {location}")
+        description_parts.append(f"Cantidad: {data_quantity}")
         if cost and cost != "-":
-            full_description += f" - Costo: {cost}"
+            description_parts.append(f"Costo: {cost}")
+        
+        full_description = " | ".join(description_parts)
         
         return ExtractedData(
             source_file=filename,
-            phone_line=current_line,
-            event_type="Datos",
+            phone_line=phone_line,
+            event_type=event_type,
             timestamp=event_datetime,
-            direction="OUT",  # Asumimos que el uso de datos es saliente
-            contact="N/A",
-            description=full_description.strip(),
-            value=data_amount
+            direction=event_direction,
+            contact=contact_number,
+            description=full_description,
+            value=data_quantity
         )
     
     def extract_bill_year(self, first_page_text):

@@ -38,37 +38,40 @@ The frontend is organized into five tab-based sections with privacy enhancements
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
 
-### Advanced Multi-Layer Data Processing Pipeline
-The system implements a sophisticated PDF processing workflow with multiple extraction methods:
+### Ultra-Robust Multi-Field Data Processing Pipeline
+The system implements an extremely sophisticated PDF processing workflow capturing all critical telecommunications data fields:
 
-1. **File Upload Handler**: Secures uploaded PDFs in the `data` directory
-2. **Enhanced Regex Processor**: Advanced pattern-based extractor using proven telecommunications bill parsing patterns
-   - Specific regex patterns for T-Mobile bill formats
-   - State-persistent processing tracking sections, lines, and dates
-   - Handles TALK, TEXT, and DATA sections with precise field extraction
-3. **Hybrid AI Processor**: AI-powered fallback when regex patterns are insufficient
-   - Smart content optimization to avoid API timeouts
-   - JSON schema validation for structured data extraction
-4. **Intelligent Processing Strategy**: 
-   - Primary: Enhanced regex processor for maximum accuracy and speed
-   - Fallback: AI hybrid processor when regex yields insufficient results
-   - Automatic selection of best results between both methods
-5. **Direct Chat File Analysis**: Users can upload PDFs directly to chat for immediate AI analysis
-6. **Chat History Export**: Full conversation history download functionality
-7. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
+1. **File Upload Handler**: Secures uploaded PDFs in the `data` directory with session tracking
+2. **Robust PDF Extractor**: Ultra-precise extractor capturing all 8 key data fields:
+   - **Fecha**: Multi-format date parsing (day variation, month in English 3-letter format, year extraction)
+   - **Hora**: Flexible time parsing supporting both 12h (AM/PM) and 24h formats
+   - **Línea**: Automatic phone line detection with (XXX) XXX-XXXX pattern recognition
+   - **Evento**: Precise categorization (Llamada, Mensaje, Datos)
+   - **Tipo**: Direction classification (ENTRANTE, SALIENTE, CONSUMO)
+   - **Contacto**: Advanced phone number extraction and cleaning
+   - **Lugar**: Location/city extraction from description fields
+   - **Duración/Cantidad**: Duration for calls, count for messages, data volume for usage
+3. **Two-Column Sequential Processing**: Reads PDF content sequentially (left column → right column)
+4. **Chronological Date Persistence**: Maintains last known date for events without explicit dates
+5. **Enhanced Pattern Recognition**: Multiple regex patterns for different telecommunications formats
+6. **Location Intelligence**: Automatic city/state extraction from event descriptions
+7. **Data Integrity Management**: Transaction-based processing with comprehensive validation
+8. **Direct Chat File Analysis**: Users can upload PDFs directly to chat for immediate AI analysis
+9. **Chat History Export**: Full conversation history download functionality
 
 ### Database Design
-Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
-- `extracted_data` table: Unified storage for all event types with fields:
-  - `phone_line`: The telephone line associated with the event
-  - `event_type`: Type of event (Llamada/Mensaje/Datos)
-  - `timestamp`: Date and time of the event
-  - `direction`: IN/OUT for calls and messages
-  - `contact`: Phone number or contact information
-  - `description`: Additional details about the event
-  - `value`: Numeric or text value (minutes, MB, format)
+Uses **SQLite** with SQLAlchemy ORM featuring a comprehensive data model optimized for telecommunications data:
+- `extracted_data` table: Complete storage for all 8 critical data fields:
+  - `phone_line`: The telephone line associated with the event (format: cleaned 10-digit number)
+  - `event_type`: Type of event (Llamada, Mensaje, Datos)
+  - `timestamp`: Complete date and time with hour/minute precision
+  - `direction`: Event direction (ENTRANTE, SALIENTE, CONSUMO)
+  - `contact`: Cleaned phone number or contact information
+  - `description`: Structured description including location, type, and cost details
+  - `value`: Duration in minutes (calls), count (messages), or data quantity (usage)
+  - `source_file`: File tracking for data lineage and integrity
 
-The database includes source file tracking for data lineage and supports complete record replacement per source file to maintain data consistency.
+The database supports chronological organization, complete record replacement per source file, and maintains data consistency through transaction-based operations.
 
 ### API Structure
 Privacy-enhanced RESTful endpoints with advanced filtering:
