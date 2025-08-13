@@ -64,13 +64,70 @@
                 <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
                     <i data-lucide="table"></i> Datos Extraídos
                 </h2>
-                <div class="flex gap-4 mb-4">
-                    <input type="text" id="quick-filter" placeholder="Buscar..." 
-                        class="flex-1 px-3 py-2 border rounded-md">
-                    <button id="export-csv" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700">
-                        <i data-lucide="download"></i> CSV
-                    </button>
+                
+                <!-- Filtros Avanzados -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                    <h3 class="text-lg font-medium mb-3">Filtros Avanzados</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                            <select id="filter-event-type" class="w-full px-3 py-2 border rounded-md text-sm">
+                                <option value="">Todos</option>
+                                <option value="Llamada">Llamadas</option>
+                                <option value="Mensaje">Mensajes</option>
+                                <option value="Datos">Datos</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                            <select id="filter-direction" class="w-full px-3 py-2 border rounded-md text-sm">
+                                <option value="">Todas</option>
+                                <option value="IN">Entrantes</option>
+                                <option value="OUT">Salientes</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Desde</label>
+                            <input type="date" id="filter-date-from" class="w-full px-3 py-2 border rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Hasta</label>
+                            <input type="date" id="filter-date-to" class="w-full px-3 py-2 border rounded-md text-sm">
+                        </div>
+                        <div class="flex items-end">
+                            <button id="apply-filters" class="w-full bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700">
+                                Aplicar Filtros
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="quick-filter" placeholder="Búsqueda rápida..." 
+                            class="flex-1 px-3 py-2 border rounded-md text-sm">
+                        <button id="clear-filters" class="bg-gray-500 text-white px-3 py-2 rounded-md text-sm hover:bg-gray-600">
+                            Limpiar
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Opciones de Exportación -->
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-gray-600" id="records-count">0 registros</span>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="anonymize-export" class="rounded">
+                            <label for="anonymize-export" class="text-sm text-gray-700">Anonimizar contactos</label>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="export-filtered-csv" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 text-sm">
+                            <i data-lucide="download"></i> CSV Filtrado
+                        </button>
+                        <button id="export-all-csv" class="bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-600 text-sm">
+                            <i data-lucide="download"></i> CSV Completo
+                        </button>
+                    </div>
+                </div>
+
                 <div id="data-grid" class="ag-theme-alpine" style="height: 400px;"></div>
             </div>
         </div>
@@ -79,11 +136,56 @@
         <div id="tab-charts" class="tab-content">
             <div class="bg-white rounded-lg shadow-md p-6">
                 <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i data-lucide="bar-chart-3"></i> Visualizaciones
+                    <i data-lucide="bar-chart-3"></i> Análisis Visual
                 </h2>
+                
+                <!-- Resumen de Privacidad -->
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="shield-check" class="text-blue-600"></i>
+                        <h3 class="font-medium text-blue-900">Modo Privacidad Activado</h3>
+                    </div>
+                    <p class="text-sm text-blue-700">Los gráficos muestran patrones agregados sin exponer información personal específica.</p>
+                </div>
+
+                <!-- Estadísticas Generales -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gray-50 p-4 rounded-lg text-center">
+                        <div id="stat-total-records" class="text-2xl font-bold text-gray-900">-</div>
+                        <div class="text-sm text-gray-600">Total Registros</div>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg text-center">
+                        <div id="stat-calls" class="text-2xl font-bold text-blue-900">-</div>
+                        <div class="text-sm text-blue-600">Llamadas</div>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg text-center">
+                        <div id="stat-messages" class="text-2xl font-bold text-green-900">-</div>
+                        <div class="text-sm text-green-600">Mensajes</div>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg text-center">
+                        <div id="stat-data" class="text-2xl font-bold text-purple-900">-</div>
+                        <div class="text-sm text-purple-600">Sesiones Datos</div>
+                    </div>
+                </div>
+
+                <!-- Gráficos -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="h-80"><canvas id="callsChart"></canvas></div>
-                    <div class="h-80"><canvas id="dataChart"></canvas></div>
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-medium text-gray-900 mb-3">Distribución por Tipo</h4>
+                        <div class="h-64"><canvas id="eventTypeChart"></canvas></div>
+                    </div>
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-medium text-gray-900 mb-3">Actividad por Hora</h4>
+                        <div class="h-64"><canvas id="hourlyActivityChart"></canvas></div>
+                    </div>
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-medium text-gray-900 mb-3">Dirección de Comunicaciones</h4>
+                        <div class="h-64"><canvas id="directionChart"></canvas></div>
+                    </div>
+                    <div class="bg-white border rounded-lg p-4">
+                        <h4 class="font-medium text-gray-900 mb-3">Tendencias Diarias</h4>
+                        <div class="h-64"><canvas id="dailyTrendsChart"></canvas></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -168,6 +270,7 @@
     // Navigation
     const navButtons = document.querySelectorAll('.nav-btn');
     const tabContents = document.querySelectorAll('.tab-content');
+    let currentFilters = {};
 
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -191,7 +294,12 @@
     // Upload functionality
     document.getElementById('pdf-input').addEventListener('change', handleFileUpload);
     document.getElementById('process-button').addEventListener('click', handleProcess);
-    document.getElementById('export-csv').addEventListener('click', () => window.location.href = '/api/export-csv');
+    
+    // Filter and export functionality
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('clear-filters').addEventListener('click', clearFilters);
+    document.getElementById('export-filtered-csv').addEventListener('click', () => exportCSV(true));
+    document.getElementById('export-all-csv').addEventListener('click', () => exportCSV(false));
 
     async function handleFileUpload(event) {
         const file = event.target.files[0];
@@ -311,73 +419,228 @@
         });
     }
 
-    async function loadData() {
+    async function loadData(filters = {}) {
         if (!gridApi) initializeGrid();
         
         try {
-            const response = await fetch('/api/get-data');
-            const data = await response.json();
-            gridApi.setRowData(data);
-            renderCharts(data);
+            const params = new URLSearchParams();
+            Object.keys(filters).forEach(key => {
+                if (filters[key] && filters[key] !== '') {
+                    if (Array.isArray(filters[key])) {
+                        params.append(key, filters[key].join(','));
+                    } else {
+                        params.append(key, filters[key]);
+                    }
+                }
+            });
+            
+            const response = await fetch(`/api/get-data?${params}`);
+            const result = await response.json();
+            
+            if (result.data) {
+                gridApi.setRowData(result.data);
+                renderCharts(result.data);
+                updateStatistics(result.data);
+                document.getElementById('records-count').textContent = `${result.data.length} registros`;
+            }
         } catch (error) {
             console.error('Error loading data:', error);
         }
     }
 
+    // Filter and export functions
+    function applyFilters() {
+        currentFilters = {};
+        
+        const eventType = document.getElementById('filter-event-type').value;
+        const direction = document.getElementById('filter-direction').value;
+        const dateFrom = document.getElementById('filter-date-from').value;
+        const dateTo = document.getElementById('filter-date-to').value;
+        
+        if (eventType) currentFilters.event_type = [eventType];
+        if (direction) currentFilters.direction = [direction];
+        if (dateFrom) currentFilters.date_from = dateFrom;
+        if (dateTo) currentFilters.date_to = dateTo;
+        
+        loadData(currentFilters);
+    }
+    
+    function clearFilters() {
+        document.getElementById('filter-event-type').value = '';
+        document.getElementById('filter-direction').value = '';
+        document.getElementById('filter-date-from').value = '';
+        document.getElementById('filter-date-to').value = '';
+        document.getElementById('quick-filter').value = '';
+        
+        currentFilters = {};
+        loadData();
+    }
+    
+    async function exportCSV(filtered) {
+        try {
+            const params = new URLSearchParams();
+            const anonymize = document.getElementById('anonymize-export').checked;
+            params.append('anonymize', anonymize);
+            
+            if (filtered && Object.keys(currentFilters).length > 0) {
+                Object.keys(currentFilters).forEach(key => {
+                    if (currentFilters[key] && currentFilters[key] !== '') {
+                        if (Array.isArray(currentFilters[key])) {
+                            params.append(key, currentFilters[key].join(','));
+                        } else {
+                            params.append(key, currentFilters[key]);
+                        }
+                    }
+                });
+            }
+            
+            const response = await fetch(`/api/export-csv?${params}`);
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = response.headers.get('Content-Disposition')?.split('filename=')[1] || 'datos.csv';
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } else {
+                const error = await response.json();
+                alert('Error exportando CSV: ' + error.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+
     // Charts
-    let callsChart, dataChart;
+    let eventTypeChart, hourlyActivityChart, directionChart, dailyTrendsChart;
+    
+    function updateStatistics(data) {
+        const totalRecords = data.length;
+        const callsCount = data.filter(d => d.event_type === 'Llamada').length;
+        const messagesCount = data.filter(d => d.event_type === 'Mensaje').length;
+        const dataCount = data.filter(d => d.event_type === 'Datos').length;
+        
+        document.getElementById('stat-total-records').textContent = totalRecords;
+        document.getElementById('stat-calls').textContent = callsCount;
+        document.getElementById('stat-messages').textContent = messagesCount;
+        document.getElementById('stat-data').textContent = dataCount;
+    }
     
     function renderCharts(data) {
-        // Calls chart
-        const callsData = data.filter(d => d.event_type === 'Llamada');
-        const callsByContact = {};
-        callsData.forEach(call => {
-            const contact = call.contact || 'Desconocido';
-            callsByContact[contact] = (callsByContact[contact] || 0) + 1;
+        // Event Type Distribution Chart
+        const eventTypes = {};
+        data.forEach(item => {
+            const type = item.event_type || 'Desconocido';
+            eventTypes[type] = (eventTypes[type] || 0) + 1;
         });
         
-        const sortedCalls = Object.entries(callsByContact)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
+        if (eventTypeChart) eventTypeChart.destroy();
+        const eventTypeCtx = document.getElementById('eventTypeChart')?.getContext('2d');
+        if (eventTypeCtx) {
+            eventTypeChart = new Chart(eventTypeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(eventTypes),
+                    datasets: [{
+                        data: Object.values(eventTypes),
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
         
-        if (callsChart) callsChart.destroy();
-        const callsCtx = document.getElementById('callsChart').getContext('2d');
-        callsChart = new Chart(callsCtx, {
-            type: 'bar',
-            data: {
-                labels: sortedCalls.map(c => c[0]),
-                datasets: [{
-                    label: 'Top 10 Contactos (Llamadas)',
-                    data: sortedCalls.map(c => c[1]),
-                    backgroundColor: '#3b82f6'
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
+        // Hourly Activity Chart
+        const hourlyData = new Array(24).fill(0);
+        data.forEach(item => {
+            if (item.timestamp) {
+                const hour = new Date(item.timestamp).getHours();
+                hourlyData[hour]++;
+            }
         });
         
-        // Data usage chart
-        const dataUsage = data.filter(d => d.event_type === 'Datos');
-        const dataByLine = {};
-        dataUsage.forEach(item => {
-            const line = item.phone_line || 'Desconocido';
-            const mb = parseFloat(item.value) || 0;
-            dataByLine[line] = (dataByLine[line] || 0) + mb;
+        if (hourlyActivityChart) hourlyActivityChart.destroy();
+        const hourlyCtx = document.getElementById('hourlyActivityChart')?.getContext('2d');
+        if (hourlyCtx) {
+            hourlyActivityChart = new Chart(hourlyCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Actividad por Hora',
+                        data: hourlyData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+        
+        // Direction Chart
+        const directions = {};
+        data.forEach(item => {
+            if (item.direction) {
+                const dir = item.direction === 'IN' ? 'Entrante' : item.direction === 'OUT' ? 'Saliente' : item.direction;
+                directions[dir] = (directions[dir] || 0) + 1;
+            }
         });
         
-        if (dataChart) dataChart.destroy();
-        const dataCtx = document.getElementById('dataChart').getContext('2d');
-        dataChart = new Chart(dataCtx, {
-            type: 'pie',
-            data: {
-                labels: Object.keys(dataByLine),
-                datasets: [{
-                    label: 'Uso de Datos por Línea (MB)',
-                    data: Object.values(dataByLine),
-                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
+        if (directionChart) directionChart.destroy();
+        const directionCtx = document.getElementById('directionChart')?.getContext('2d');
+        if (directionCtx) {
+            directionChart = new Chart(directionCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(directions),
+                    datasets: [{
+                        label: 'Por Dirección',
+                        data: Object.values(directions),
+                        backgroundColor: ['#10b981', '#ef4444']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+        
+        // Daily Trends Chart
+        const dailyData = {};
+        data.forEach(item => {
+            if (item.timestamp) {
+                const date = new Date(item.timestamp).toLocaleDateString();
+                dailyData[date] = (dailyData[date] || 0) + 1;
+            }
         });
+        
+        const sortedDates = Object.keys(dailyData).sort();
+        
+        if (dailyTrendsChart) dailyTrendsChart.destroy();
+        const dailyCtx = document.getElementById('dailyTrendsChart')?.getContext('2d');
+        if (dailyCtx) {
+            dailyTrendsChart = new Chart(dailyCtx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates,
+                    datasets: [{
+                        label: 'Actividad Diaria',
+                        data: sortedDates.map(date => dailyData[date]),
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { display: false }
+                    }
+                }
+            });
+        }
     }
 
     // Chat functionality

@@ -1,29 +1,33 @@
 # Overview
 
-This is an advanced AI-powered PDF data extraction and analysis application built with Flask that combines multiple extraction methods for optimal accuracy. The system uses enhanced regex patterns (based on proven telecommunications bill processors) as the primary extraction method, with Google's Gemini AI as intelligent fallback. It processes telecommunications billing PDFs to extract call logs, message history, and data usage information. The application features a mobile-style interface with navigation tabs, interactive data visualization, an AI chat assistant with direct PDF upload capability, and comprehensive analysis tools. Uses SQLite for data persistence with transaction-based integrity management.
+This is an advanced AI-powered PDF data extraction and analysis application built with Flask that combines multiple extraction methods for optimal accuracy while maintaining complete user privacy. The system uses enhanced regex patterns (based on proven telecommunications bill processors) as the primary extraction method, with Google's Gemini AI as intelligent fallback. It processes telecommunications billing PDFs to extract call logs, message history, and data usage information with discrete processing that ensures user data privacy. The application features a mobile-style interface with privacy-focused design, advanced filtering system, anonymization options, discrete data visualization, AI chat assistant with direct PDF upload capability, and comprehensive privacy-safe analysis tools. Uses SQLite for data persistence with transaction-based integrity management and secure data handling.
 
 # User Preferences
 
-Preferred communication style: Simple, everyday language.
+- **Preferred communication style**: Simple, everyday language
+- **Privacy Priority**: Complete privacy protection - user data must be processed discretely without developer visibility
+- **Quality over Sophistication**: Extraction accuracy more important than AI complexity
+- **Workflow Requirements**: Complete redesign from start to finish with focus on efficiency and user discretion
+- **Interface Requirements**: Discrete data access with advanced filtering and secure export options
 
 # System Architecture
 
 ## Frontend Architecture
 
-The application uses a single-page mobile-style interface built with:
-- **TailwindCSS** for modern, responsive UI design
-- **Vanilla JavaScript** for client-side interactions and API calls
-- **Chart.js** for data visualizations (bar charts and pie charts)
-- **AG-Grid Community** for advanced data table functionality
-- **Lucide Icons** for consistent iconography
+The application uses a mobile-style interface with privacy-first design built with:
+- **TailwindCSS** for modern, responsive UI design with discrete styling
+- **Vanilla JavaScript** for client-side interactions and secure API calls
+- **Chart.js** for privacy-focused data visualizations showing aggregated patterns
+- **AG-Grid Community** for advanced data table with filtering capabilities
+- **Lucide Icons** for consistent iconography including privacy indicators
 - **PDF.js** for in-browser PDF preview and page selection
 
-The frontend is organized into five tab-based sections:
-- Upload tab for PDF file selection
-- Process tab with visual PDF page selector and AI extraction
-- Data tab with searchable/filterable grid view
-- Charts tab with interactive visualizations
-- Chat tab for AI-powered Q&A about extracted data
+The frontend is organized into five tab-based sections with privacy enhancements:
+- **Upload tab**: Secure PDF file selection with session tracking
+- **Process tab**: Visual PDF page selector with hybrid AI/regex extraction
+- **Data tab**: Advanced filtering system with discrete data access and anonymization options
+- **Charts tab**: Privacy-safe visualizations showing usage patterns without exposing personal data
+- **Chat tab**: AI-powered Q&A with direct PDF upload and chat history export functionality
 
 ## Backend Architecture
 
@@ -65,14 +69,14 @@ Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
 The database includes source file tracking for data lineage and supports complete record replacement per source file to maintain data consistency.
 
 ### API Structure
-RESTful endpoints provide JSON data for the frontend:
-- `/api/upload` - PDF file upload endpoint
-- `/api/process` - AI-powered data extraction endpoint
-- `/api/get-data` - Complete dataset retrieval
-- `/api/export-csv` - CSV export functionality
-- `/api/chat` - AI chat assistant endpoint for Q&A
-- `/api/chat-file` - Direct PDF file upload and analysis in chat
-- `/api/export-chat` - Chat history export functionality
+Privacy-enhanced RESTful endpoints with advanced filtering:
+- `/api/upload` - Secure PDF file upload with session tracking
+- `/api/process` - Hybrid extraction with privacy mode processing
+- `/api/get-data` - Filtered dataset retrieval with privacy controls
+- `/api/export-csv` - Advanced CSV export with anonymization options
+- `/api/chat` - AI chat assistant with context-aware responses
+- `/api/chat-file` - Direct PDF upload and analysis with privacy protection
+- `/api/export-chat` - Secure chat history export functionality
 
 ## External Dependencies
 
