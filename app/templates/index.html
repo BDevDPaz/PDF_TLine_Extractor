@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador PDF con IA v6</title>
+    <title>Sistema de Extracción PDF 100% Confiable - Híbrido Ultra-Agresivo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
@@ -474,51 +474,123 @@
         if (gridApi) gridApi.setQuickFilter(e.target.value);
     });
 
+    // FRONTEND: Gestión de estado del cliente
+    const AppState = {
+        currentFile: null,
+        fileSize: 0,
+        uploadTimestamp: null,
+        processingStatus: 'idle', // idle, uploading, processing, completed, error
+        extractionResults: null,
+        selectedPages: 'all',
+        
+        // FRONTEND: Actualizar estado y re-renderizar UI
+        setState(newState) {
+            Object.assign(this, newState);
+            this.updateUI();
+        },
+        
+        // FRONTEND: Actualización automática de la interfaz
+        updateUI() {
+            const statusElements = document.querySelectorAll('[data-status-indicator]');
+            statusElements.forEach(el => {
+                el.textContent = this.processingStatus;
+                el.className = `status-indicator ${this.processingStatus}`;
+            });
+            
+            if (this.processingStatus === 'completed' && this.extractionResults) {
+                document.getElementById('results-section')?.classList.remove('hidden');
+            }
+        }
+    };
+
+    // FRONTEND: Manejo de carga de archivos con feedback visual mejorado
     async function handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Show AI processing indicator
+        // FRONTEND: Actualizar estado del cliente
+        AppState.setState({ 
+            processingStatus: 'uploading',
+            currentFile: file.name,
+            fileSize: file.size
+        });
+
+        // FRONTEND: Feedback visual mejorado
         document.getElementById('ai-processing').classList.remove('hidden');
-        updateProcessingStep('upload', '1. Cargando archivo', 'completed');
+        updateProcessingStep('upload', '1. Comunicándose con backend...', 'processing');
 
         const formData = new FormData();
         formData.append('pdfFile', file);
 
         try {
-            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            // FRONTEND: Comunicación con backend - Upload
+            const response = await fetch('/api/upload', { 
+                method: 'POST', 
+                body: formData 
+            });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error);
+            
+            if (!result.success) {
+                throw new Error(`${result.error} (${result.error_code})`);
+            }
+            
+            // FRONTEND: Procesar respuesta estructurada del backend
+            AppState.setState({
+                currentFile: result.filename,
+                fileSize: result.file_size,
+                uploadTimestamp: result.upload_timestamp,
+                processingStatus: 'processing'
+            });
             
             currentFilename = result.filename;
-            updateProcessingStep('extract', '2. Extrayendo datos con IA', 'processing');
+            updateProcessingStep('upload', `1. Archivo subido (${(result.file_size / 1024).toFixed(1)} KB)`, 'completed');
+            updateProcessingStep('extract', '2. Procesando con sistema híbrido ultra-agresivo...', 'processing');
             
-            // Auto-process with AI
+            // FRONTEND: Comunicación con backend - Procesamiento pesado
             const processResponse = await fetch('/api/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    filename: currentFilename, 
-                    pages: 'all' 
+                    filename: result.filename, 
+                    pages: AppState.selectedPages 
                 })
             });
 
-            if (processResponse.ok) {
-                updateProcessingStep('extract', '2. Datos extraídos exitosamente', 'completed');
-                updateProcessingStep('visualize', '3. Generando visualizaciones', 'processing');
+            const processResult = await processResponse.json();
+            
+            if (processResult.success) {
+                // FRONTEND: Procesar respuesta detallada del backend
+                AppState.setState({
+                    processingStatus: 'completed',
+                    extractionResults: processResult.processing_summary
+                });
                 
-                // Load data and switch to dashboard
+                const summary = processResult.processing_summary;
+                updateProcessingStep('extract', 
+                    `2. Extraídos ${summary.records_extracted} registros con ${summary.strategy_used} (${summary.precision_percentage}%)`, 
+                    'completed');
+                updateProcessingStep('visualize', '3. Generando visualizaciones...', 'processing');
+                
+                // FRONTEND: Actualizar datos y cambiar vista
                 await loadData();
                 updateProcessingStep('visualize', '3. Visualizaciones completadas', 'completed');
                 
-                // Hide processing and switch to dashboard
+                // FRONTEND: Transición automática de interfaz
                 setTimeout(() => {
                     document.getElementById('ai-processing').classList.add('hidden');
                     document.querySelector('[data-tab="data"]').click();
                 }, 1500);
+                
+            } else {
+                throw new Error(processResult.error || 'Error en procesamiento');
             }
+            
         } catch (error) {
+            // FRONTEND: Manejo de errores con feedback al usuario
+            AppState.setState({ processingStatus: 'error' });
             document.getElementById('ai-processing').classList.add('hidden');
+            updateProcessingStep('upload', '❌ Error: ' + error.message, 'error');
+            console.error('Error en procesamiento:', error);
         }
     }
 
@@ -572,6 +644,7 @@
         }
     }
 
+    // FRONTEND: Procesamiento manual con sistema híbrido ultra-agresivo
     async function handleProcess() {
         const selectedPages = Array.from(document.querySelectorAll('.page-checkbox:checked'))
                                    .map(cb => parseInt(cb.dataset.page));
@@ -581,28 +654,60 @@
             return;
         }
 
+        // FRONTEND: Actualizar estado y UI
+        AppState.setState({ processingStatus: 'processing', selectedPages });
+        
         const btn = document.getElementById('process-button');
         btn.disabled = true;
-        setStatus('process-status', '🤖 La IA está analizando el documento...', 'loading');
+        setStatus('process-status', '🔥 Backend ejecutando sistema híbrido ultra-agresivo...', 'loading');
 
         try {
+            // FRONTEND: Comunicación con backend para procesamiento pesado
             const response = await fetch('/api/process', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ filename: currentFilename, pages: selectedPages })
+                body: JSON.stringify({ 
+                    filename: currentFilename, 
+                    pages: selectedPages 
+                })
             });
+            
             const result = await response.json();
             
-            if (!response.ok) throw new Error(result.error);
+            if (result.success) {
+                // FRONTEND: Procesar respuesta detallada del backend
+                const summary = result.processing_summary;
+                const strategies = result.strategy_details;
+                
+                AppState.setState({
+                    processingStatus: 'completed',
+                    extractionResults: summary
+                });
+                
+                // FRONTEND: Mostrar resultados detallados
+                const statusMessage = `✅ ${result.message}\n` +
+                    `📊 Estrategias ejecutadas: ${strategies.length}\n` +
+                    `⏱️ Tiempo total: ${summary.total_duration_seconds}s\n` +
+                    `🎯 Objetivo: ${summary.target_achieved ? 'SUPERADO' : 'EN PROGRESO'}`;
+                
+                setStatus('process-status', statusMessage, 'success');
+                
+                // FRONTEND: Cambio automático de vista después del éxito
+                setTimeout(() => {
+                    document.querySelector('[data-tab="data"]').click();
+                    loadData(); // Recargar datos con los nuevos resultados
+                }, 2000);
+                
+            } else {
+                throw new Error(`${result.error} (${result.error_code || 'UNKNOWN'})`);
+            }
             
-            setStatus('process-status', '✅ ' + result.message, 'success');
-            
-            // Switch to data tab
-            setTimeout(() => {
-                document.querySelector('[data-tab="data"]').click();
-            }, 1500);
         } catch (error) {
-            setStatus('process-status', '❌ ' + error.message, 'error');
+            // FRONTEND: Manejo de errores con información detallada
+            AppState.setState({ processingStatus: 'error' });
+            setStatus('process-status', '❌ Error en backend: ' + error.message, 'error');
+            console.error('Error en procesamiento:', error);
+            
         } finally {
             btn.disabled = false;
         }
@@ -675,25 +780,63 @@
         }
     }
 
+    // FRONTEND: Carga de datos con manejo de respuestas estructuradas del backend
     async function loadData() {
         try {
-            const response = await fetch('/api/get-data');
-            const data = await response.json();
+            // FRONTEND: Petición al backend con filtros aplicados
+            const params = new URLSearchParams();
+            Object.entries(currentFilters).forEach(([key, value]) => {
+                if (value && value !== 'all') params.append(key, value);
+            });
             
-            if (Array.isArray(data)) {
+            const response = await fetch(`/api/get-data?${params}`);
+            const result = await response.json();
+            
+            if (result.success) {
+                // FRONTEND: Procesar respuesta estructurada del backend
+                const data = result.data;
+                const stats = result.stats;
+                
+                // FRONTEND: Actualizar componentes de presentación
                 renderDataTable(data);
                 renderCharts(data);
-                updateStatistics(data);
+                updateStatistics(data, stats);
                 
+                // FRONTEND: Actualizar indicadores
                 const recordsElement = document.getElementById('records-count');
                 if (recordsElement) {
-                    recordsElement.textContent = `${data.length} registros`;
+                    recordsElement.textContent = `${data.length} registros mostrados`;
                 }
+                
+                // FRONTEND: Mostrar información de filtros aplicados
+                const filtersInfo = result.filters_applied;
+                updateFilterInfo(filtersInfo);
+                
+            } else {
+                throw new Error(result.error || 'Error obteniendo datos');
             }
+            
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error cargando datos:', error);
             const statusEl = document.getElementById('table-status');
-            if (statusEl) statusEl.textContent = 'Error cargando datos';
+            if (statusEl) statusEl.textContent = 'Error comunicándose con backend';
+        }
+    }
+    
+    // FRONTEND: Actualizar información de filtros aplicados
+    function updateFilterInfo(filtersApplied) {
+        const filterInfoEl = document.getElementById('filter-info');
+        if (!filterInfoEl) return;
+        
+        const activeFilters = Object.entries(filtersApplied)
+            .filter(([key, value]) => value && value !== 'all')
+            .map(([key, value]) => `${key}: ${value}`);
+        
+        if (activeFilters.length > 0) {
+            filterInfoEl.textContent = `Filtros activos: ${activeFilters.join(', ')}`;
+            filterInfoEl.classList.remove('hidden');
+        } else {
+            filterInfoEl.classList.add('hidden');
         }
     }
 
