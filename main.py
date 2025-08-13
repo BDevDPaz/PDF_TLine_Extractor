@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from app.db.database import init_db, SessionLocal
 from app.db.models import ExtractedData
 from app.optimized_processor import extract_data_with_optimized_processing
+from app.enhanced_regex_processor import extract_data_with_enhanced_regex
 from app.ai_chat import get_chat_response
 from app.chat_file_handler import process_chat_file_upload, export_chat_history
 
@@ -57,9 +58,18 @@ def process_file():
         print("Warning: No Google API Key found, using regex-only mode")
     
     try:
-        record_count = extract_data_with_optimized_processing(filepath, pages)
+        # Intentar primero con el procesador mejorado basado en tus extractores
+        record_count = extract_data_with_enhanced_regex(filepath, pages)
+        
+        # Si no obtuvo buenos resultados, intentar con el procesador híbrido
+        if record_count < 10:  # Si extrajo muy pocos registros
+            print(f"Procesador regex obtuvo {record_count} registros, intentando con IA híbrida...")
+            record_count_hybrid = extract_data_with_optimized_processing(filepath, pages)
+            if record_count_hybrid > record_count:
+                record_count = record_count_hybrid
+        
         if record_count > 0:
-            return jsonify({'message': f'Éxito: Se extrajeron {record_count} registros procesando todas las páginas seleccionadas.'})
+            return jsonify({'message': f'Éxito: Se extrajeron {record_count} registros procesando todas las páginas seleccionadas usando extractor optimizado.'})
         else:
             return jsonify({'message': 'El procesamiento completó pero no se encontraron datos estructurados que extraer.'}), 200
     except Exception as e:
@@ -137,7 +147,7 @@ def chat_file_handler():
     if file.filename == '' or not question.strip():
         return jsonify({'error': 'Archivo vacío o pregunta vacía'}), 400
     
-    if not file.filename.lower().endswith('.pdf'):
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'Solo se permiten archivos PDF'}), 400
     
     try:

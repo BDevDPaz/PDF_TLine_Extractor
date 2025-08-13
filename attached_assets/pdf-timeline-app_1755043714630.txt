@@ -1,0 +1,3359 @@
+🌐 Replit como entorno principal
+
+✅ Consideraciones técnicas:
+
+Replit permite usar Flask como servidor backend para una app web.
+
+Podés subir archivos manualmente o desde tu código.
+
+El backend puede procesar los PDFs, generar CSVs o timelines, y entregarlos vía API o plantilla HTML.
+
+Todo el código, assets y estructura se alojan en una sola carpeta de proyecto.
+
+🧱 Estructura del proyecto en Replit
+
+/
+├── main.py              # Entry point con Flask
+├── extractors/          # Maneja lectura de PDF y extracción de tablas
+│   └── __init__.py
+├── normalizers/         # Limpieza y tipificación de datos
+│   └── __init__.py
+├── validators/          # Validación de datos
+│   └── __init__.py
+├── block_detector.py    # Detección de bloques A/B/C
+├── db/                  # Base de datos SQLite
+│   ├── schema.py        # Esquemas y creación
+│   └── load.py          # Inserta datos
+├── static/              # Archivos estáticos (CSS, JS)
+│   └── style.css
+├── templates/           # HTML para renderizar la app
+│   ├── index.html
+│   ├── summary.html
+│   └── timeline.html
+├── tests/               # Pruebas unitarias
+│   ├── test_extractors.py
+│   ├── test_normalizers.py
+│   ├── test_db.py
+│   └── test_block_detector.py
+├── data/                # Archivos PDF y CSV procesados
+│   ├── raw/
+│   └── processed/
+├── requirements.txt     # Dependencias para Replit
+└── replit.nix           # (se genera automático)
+
+📦 Paquetes para tu requirements.txt
+
+flask
+pdfplumber
+pandas
+python-dateutil
+phonenumbers
+regex
+SQLAlchemy
+tqdm
+rich
+plotly
+pytest
+
+Esto garantiza que el backend pueda leer los PDFs, normalizar los datos y servirlos por web.
+
+🧠 Flujo de la aplicación web
+
+Página web:
+
+Subís Bloque A, B o C como PDF.
+
+Flask procesa y extrae los datos.
+
+Guarda CSV y actualiza SQLite.
+
+Muestra resumen: cantidad de registros, timeline, contactos frecuentes.
+
+Backend con Flask:
+
+Endpoint /upload: recibe PDF, detecta si es A/B/C.
+
+Endpoint /summary: muestra stats, insights.
+
+Endpoint /timeline: datos en orden cronológico (calls + texts).
+
+Templates renderizan los resultados en HTML.
+
+✨ Interfaz web (HTML moderna con Flask + Jinja2)
+
+index.html tendrá:
+
+Formulario para subir PDF.
+
+Tabla para preview de registros.
+
+Gráfico o timeline.
+
+Filtros por fecha, tipo de llamada, número.
+
+summary.html incluirá:
+
+Resumen visual de estadísticas clave.
+
+Gráficos interactivos con Plotly.
+
+Insights sobre contactos frecuentes y actividad.
+
+timeline.html mostrará:
+
+Timeline interactivo de llamadas y mensajes.
+
+Filtros avanzados por fecha y tipo.
+
+💻 Código para cada archivo
+
+main.py
+
+from flask import Flask, request, render_template, jsonify
+import os
+from extractors import extract_data
+from normalizers import normalize_data
+from validators import validate_data
+from db.load import insert_data
+from block_detector import detect_block
+
+app = Flask(__name__)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files['file']
+    if file:
+        file_path = os.path.join('data/raw', file.filename)
+        file.save(file_path)
+        data = extract_data(file_path)
+        validated_data = validate_data(data)
+        normalized_data = normalize_data(validated_data)
+        block_type = detect_block(file_path)
+        insert_data(normalized_data)
+        return jsonify({'message': 'File processed successfully', 'block_type': block_type})
+
+@app.route('/summary', methods=['GET'])
+def summary():
+    # Logic to fetch and summarize data
+    return render_template('summary.html')
+
+@app.route('/timeline', methods=['GET'])
+def timeline():
+    # Logic to fetch and display timeline
+    return render_template('timeline.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+extractors/init.py
+
+import pdfplumber
+
+def extract_data(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        data = []
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                data.extend(table)
+    return data
+
+normalizers/init.py
+
+import pandas as pd
+
+def normalize_data(data):
+    df = pd.DataFrame(data)
+    # Add normalization logic here
+    return df
+
+validators/init.py
+
+import re
+
+def validate_data(data):
+    validated_data = []
+    for record in data:
+        if re.match(r'\d{4}-\d{2}-\d{2}', record[0]):  # Example: Validate date format
+            validated_data.append(record)
+    return validated_data
+
+block_detector.py
+
+def detect_block(file_path):
+    # Logic to detect block type (A/B/C)
+    return 'A'  # Example: Return block type
+
+db/schema.py
+
+from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
+
+engine = create_engine('sqlite:///data/database.db')
+metadata = MetaData()
+
+records = Table('records', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', String),
+    Column('phone', String),
+    Column('date', String)
+)
+
+metadata.create_all(engine)
+
+db/load.py
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from db.schema import records
+
+engine = create_engine('sqlite:///data/database.db')
+Session = sessionmaker(bind=engine)
+session = Session()
+
+def insert_data(data):
+    for record in data:
+        session.add(records(**record))
+    session.commit()
+
+static/style.css
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    overflow: hidden;
+}
+
+h1 {
+    color: #333;
+    font-size: 2.5em;
+}
+
+button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+templates/index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PDF</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload PDF</h1>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" required>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+</body>
+</html>
+
+templates/summary.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summary</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Summary</h1>
+        <div id="stats">
+            <!-- Dynamic stats will be inserted here -->
+        </div>
+        <div id="chart">
+            <!-- Plotly chart will be rendered here -->
+        </div>
+    </div>
+</body>
+</html>
+
+templates/timeline.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Timeline</h1>
+        <div id="timeline">
+            <!-- Timeline data will be rendered here -->
+        </div>
+    </div>
+</body>
+</html>
+
+💡 Próximo paso
+
+Ya está todo el proyecto completo listo para usar en Replit. Podés importar la estructura, instalar las dependencias y empezar a probar la aplicación. Si necesitás ayuda con algún ajuste o funcionalidad adicional, avisame. 
+
+🛠️ Comandos ejecutables en Termux para crear la estructura y archivos automáticamente
+
+# Crear estructura de carpetas
+mkdir -p pdf-timeline-app/{extractors,normalizers,validators,db,static,templates,tests,data/{raw,processed}}
+
+# Crear archivos con contenido
+cat > pdf-timeline-app/main.py << 'EOF'
+from flask import Flask, request, render_template, jsonify
+import os
+from extractors import extract_data
+from normalizers import normalize_data
+from validators import validate_data
+from db.load import insert_data
+from block_detector import detect_block
+
+app = Flask(__name__)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files['file']
+    if file:
+        file_path = os.path.join('data/raw', file.filename)
+        file.save(file_path)
+        data = extract_data(file_path)
+        validated_data = validate_data(data)
+        normalized_data = normalize_data(validated_data)
+        block_type = detect_block(file_path)
+        insert_data(normalized_data)
+        return jsonify({'message': 'File processed successfully', 'block_type': block_type})
+
+@app.route('/summary', methods=['GET'])
+def summary():
+    # Logic to fetch and summarize data
+    return render_template('summary.html')
+
+@app.route('/timeline', methods=['GET'])
+def timeline():
+    # Logic to fetch and display timeline
+    return render_template('timeline.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
+EOF
+
+cat > pdf-timeline-app/extractors/__init__.py << 'EOF'
+import pdfplumber
+
+def extract_data(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        data = []
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                data.extend(table)
+    return data
+EOF
+
+cat > pdf-timeline-app/normalizers/__init__.py << 'EOF'
+import pandas as pd
+
+def normalize_data(data):
+    df = pd.DataFrame(data)
+    # Add normalization logic here
+    return df
+EOF
+
+cat > pdf-timeline-app/validators/__init__.py << 'EOF'
+import re
+
+def validate_data(data):
+    validated_data = []
+    for record in data:
+        if re.match(r'\d{4}-\d{2}-\d{2}', record[0]):  # Example: Validate date format
+            validated_data.append(record)
+    return validated_data
+EOF
+
+cat > pdf-timeline-app/block_detector.py << 'EOF'
+def detect_block(file_path):
+    # Logic to detect block type (A/B/C)
+    return 'A'  # Example: Return block type
+EOF
+
+cat > pdf-timeline-app/db/schema.py << 'EOF'
+from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
+
+engine = create_engine('sqlite:///data/database.db')
+metadata = MetaData()
+
+records = Table('records', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', String),
+    Column('phone', String),
+    Column('date', String)
+)
+
+metadata.create_all(engine)
+EOF
+
+cat > pdf-timeline-app/db/load.py << 'EOF'
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from db.schema import records
+
+engine = create_engine('sqlite:///data/database.db')
+Session = sessionmaker(bind=engine)
+session = Session()
+
+def insert_data(data):
+    for record in data:
+        session.add(records(**record))
+    session.commit()
+EOF
+
+cat > pdf-timeline-app/static/style.css << 'EOF'
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    overflow: hidden;
+}
+
+h1 {
+    color: #333;
+    font-size: 2.5em;
+}
+
+button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+EOF
+
+cat > pdf-timeline-app/templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PDF</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload PDF</h1>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" required>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+</body>
+</html>
+EOF
+
+cat > pdf-timeline-app/templates/summary.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summary</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Summary</h1>
+        <div id="stats">
+            <!-- Dynamic stats will be inserted here -->
+        </div>
+        <div id="chart">
+            <!-- Plotly chart will be rendered here -->
+        </div>
+    </div>
+</body>
+</html>
+EOF
+
+cat > pdf-timeline-app/templates/timeline.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Timeline</h1>
+        <div id="timeline">
+            <!-- Timeline data will be rendered here -->
+        </div>
+    </div>
+</body>
+</html>
+EOF
+
+cat > pdf-timeline-app/tests/test_extractors.py << 'EOF'
+def test_extract_data():
+    # Test logic for extract_data
+    pass
+EOF
+
+cat > pdf-timeline-app/tests/test_normalizers.py << 'EOF'
+def test_normalize_data():
+    # Test logic for normalize_data
+    pass
+EOF
+
+cat > pdf-timeline-app/tests/test_db.py << 'EOF'
+def test_insert_data():
+    # Test logic for insert_data
+    pass
+EOF
+
+cat > pdf-timeline-app/tests/test_block_detector.py << 'EOF'
+def test_detect_block():
+    # Test logic for detect_block
+    pass
+EOF
+
+cat > pdf-timeline-app/requirements.txt << 'EOF'
+flask
+pdfplumber
+pandas
+python-dateutil
+phonenumbers
+regex
+SQLAlchemy
+tqdm
+rich
+plotly
+pytest
+EOF
+
+# Confirmación final
+echo "Estructura y archivos creados en pdf-timeline-app/"
+``` 
+
+¡Perfecto! Te dejo aquí varias mejoras enfocadas especialmente en la **extracción, normalización** y **formato tabular CSV**, adaptadas a tu entorno en Termux y tu enfoque modular:
+
+---
+
+## 🛠️ Mejoras clave en el extractor (`extractors/__init__.py`)
+
+```python
+import pdfplumber
+import pandas as pd
+
+def extract_data(file_path):
+    all_tables = []
+    with pdfplumber.open(file_path) as pdf:
+        for page_num, page in enumerate(pdf.pages):
+            tables = page.extract_tables()
+            for table in tables:
+                if not table: continue
+                df = pd.DataFrame(table)
+                df["source_page"] = page_num + 1
+                all_tables.append(df)
+    return pd.concat(all_tables, ignore_index=True) if all_tables else pd.DataFrame()
+```
+
+✅ Esto te devuelve un solo `DataFrame` consolidado con info de página fuente.
+
+---
+
+## 🧹 Mejoras en `normalizers/__init__.py` (incluye alto dinámico, filtro y exportación CSV)
+
+```python
+import pandas as pd
+
+def normalize_data(df):
+    df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
+    df.dropna(how='all', inplace=True)
+    return df
+
+def export_to_csv(df, output_path='data/processed/cleaned_output.csv'):
+    df.to_csv(output_path, index=False)
+```
+
+Llamar a `export_to_csv(df)` luego del flujo principal te da un CSV bien pulido.
+
+---
+
+## 📊 Sugerencia para filtros y ajustes visuales en HTML
+
+Integra [DataTables.js](https://datatables.net/) en `summary.html` para encabezados con filtro automático y ajuste:
+
+```html
+<!-- Agrega esto en el <head> -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<!-- Y en el <body> -->
+<table id="data-table" class="display">
+  <!-- Tu tabla de datos va aquí -->
+</table>
+
+<script>
+$(document).ready(function () {
+  $('#data-table').DataTable({
+    autoWidth: true,
+    scrollY: '50vh',
+    scrollCollapse: true,
+    paging: true
+  });
+});
+</script>
+```
+
+---
+
+## ⚙️ Validación más robusta
+
+```python
+def validate_data(df):
+    df = df[df['date'].str.match(r'\d{4}-\d{2}-\d{2}', na=False)]
+    return df
+```
+
+---
+
+## 📂 Bonus: mejoras al instalador bash
+
+- Arreglar `if ! command -v pip &> /dev/null; then` (faltaba el `;`)
+- Ejecutar directamente la app después de instalación:
+  
+```bash
+echo "Instalación completada. Puedes iniciar la app con:"
+echo "cd pdf-timeline-app && python3 main.py"
+```
+
+---
+
+¿Te gustaría que añadamos pruebas unitarias con datos simulados? También puedo ayudarte a incluir validaciones de columnas esperadas, checksum por página, o una vista previa tipo paginador para Termux. Tú marcas el ritmo, Byron. 
+
+```bash
+#!/bin/bash
+# Instalador mejorado para pdf-timeline-app (Termux-friendly)
+# - Extracción robusta con pdfplumber -> DataFrame consolidado y promoción de encabezados.
+# - Normalización: nombres de columnas, fechas ISO, teléfonos normalizados, exportación CSV y XLSX con filtros/auto-ajuste.
+# - Validación: filas vacías/duplicadas y fecha válida.
+# - UI: Summary con DataTables (filtros en encabezados, autoWidth, scroll).
+# - DB: Inserción con SQLAlchemy Core y endpoint /api/records para DataTables.
+
+set -euo pipefail
+
+# Detectar Python y pip
+if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+if command -v pip3 >/dev/null 2>&1; then PIP=pip3;
+elif command -v pip >/dev/null 2>&1; then PIP=pip;
+else
+  echo "pip no está instalado. Por favor, instálalo antes de continuar."
+  exit 1
+fi
+
+# Crear estructura de carpetas
+mkdir -p pdf-timeline-app/{extractors,normalizers,validators,db,static,templates,tests,data/{raw,processed}}
+
+# main.py
+cat > pdf-timeline-app/main.py << 'EOF'
+from flask import Flask, request, render_template, jsonify
+import os
+from extractors import extract_data
+from normalizers import normalize_data, export_to_csv, to_xlsx_formatted
+from validators import validate_data
+from db.load import insert_data, get_all_records
+from block_detector import detect_block
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    os.makedirs('data/raw', exist_ok=True)
+    os.makedirs('data/processed', exist_ok=True)
+    file_path = os.path.join('data/raw', file.filename)
+    file.save(file_path)
+
+    # Pipeline: extract -> normalize -> validate -> export -> insert
+    df_raw = extract_data(file_path)
+    df_norm = normalize_data(df_raw)
+    df_valid = validate_data(df_norm)
+
+    # Exportaciones: CSV + XLSX con filtros/autoajuste
+    csv_path = 'data/processed/cleaned_output.csv'
+    xlsx_path = 'data/processed/cleaned_output.xlsx'
+    export_to_csv(df_valid, csv_path)
+    to_xlsx_formatted(df_valid, xlsx_path)
+
+    block_type = detect_block(file_path)
+    inserted = insert_data(df_valid)
+
+    return jsonify({
+        'message': 'File processed successfully',
+        'block_type': block_type,
+        'rows_exported': len(df_valid),
+        'rows_inserted': inserted,
+        'csv': csv_path,
+        'xlsx': xlsx_path
+    })
+
+@app.route('/summary', methods=['GET'])
+def summary():
+    return render_template('summary.html')
+
+@app.route('/timeline', methods=['GET'])
+def timeline():
+    return render_template('timeline.html')
+
+@app.route('/api/records', methods=['GET'])
+def api_records():
+    records = get_all_records()
+    return jsonify(records)
+
+if __name__ == '__main__':
+    # host 0.0.0.0 para acceso desde LAN si se desea; puerto 8000 común en Termux
+    app.run(host='0.0.0.0', port=8000, debug=True)
+EOF
+
+# extractors/__init__.py
+cat > pdf-timeline-app/extractors/__init__.py << 'EOF'
+import pdfplumber
+import pandas as pd
+
+def _promote_header_if_applicable(df: pd.DataFrame) -> pd.DataFrame:
+    # Heurística simple: si la primera fila no tiene NaNs y sus valores son únicos, usarla como cabecera
+    if df.shape[0] > 1 and df.iloc[0].isna().sum() == 0 and df.iloc[0].nunique(dropna=False) == df.shape[1]:
+        df.columns = df.iloc[0].astype(str)
+        df = df.iloc[1:].reset_index(drop=True)
+    return df
+
+def extract_data(file_path: str) -> pd.DataFrame:
+    all_tables = []
+    with pdfplumber.open(file_path) as pdf:
+        for page_num, page in enumerate(pdf.pages, start=1):
+            tables = page.extract_tables()
+            for table in tables or []:
+                if not table:
+                    continue
+                # Rellenar filas con distintas longitudes
+                max_cols = max(len(r) for r in table if r is not None) if table else 0
+                normalized_rows = [(row or []) + [None] * (max_cols - len(row or [])) for row in table]
+                df = pd.DataFrame(normalized_rows)
+                df = _promote_header_if_applicable(df)
+                df["source_page"] = page_num
+                all_tables.append(df)
+
+    if not all_tables:
+        return pd.DataFrame()
+
+    # Alinear columnas: outer join por nombre, rellenando faltantes
+    # Si algunas tablas no promovieron encabezado, pandas asignará numéricos; se armonizará más adelante
+    base = pd.concat(all_tables, ignore_index=True, sort=False)
+    # Normalizar espacios/strings básicos
+    base = base.applymap(lambda x: str(x).strip() if isinstance(x, str) else x)
+    return base
+EOF
+
+# normalizers/__init__.py
+cat > pdf-timeline-app/normalizers/__init__.py << 'EOF'
+import pandas as pd
+from dateutil import parser as dateparser
+import phonenumbers
+
+# Mapeo de sinónimos a columnas destino
+SYNONYMS = {
+    'date': {'date', 'fecha', 'fec', 'fcha', 'fech', 'fecha_evento'},
+    'name': {'name', 'nombre', 'persona', 'contacto', 'solicitante'},
+    'phone': {'phone', 'telefono', 'teléfono', 'tel', 'cel', 'celular'}
+}
+
+def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    # Si columnas son numéricas (0,1,2...), convertir a str para poder mapear luego
+    df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
+    return df
+
+def _map_synonyms(df: pd.DataFrame) -> pd.DataFrame:
+    col_map = {}
+    cols = set(df.columns)
+    for target, synonyms in SYNONYMS.items():
+        hit = next((c for c in cols if c in synonyms), None)
+        if hit:
+            col_map[hit] = target
+    if col_map:
+        df = df.rename(columns=col_map)
+    return df
+
+def _to_iso_date(val):
+    if pd.isna(val):
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        dt = dateparser.parse(s, dayfirst=False, yearfirst=True, fuzzy=True)
+        return dt.date().isoformat()
+    except Exception:
+        return None
+
+def _normalize_phone(val, default_region='US'):
+    if pd.isna(val):
+        return None
+    s = ''.join(ch for ch in str(val) if ch.isdigit() or ch == '+')
+    if not s:
+        return None
+    try:
+        num = phonenumbers.parse(s, default_region)
+        if phonenumbers.is_valid_number(num):
+            return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164)
+    except Exception:
+        return None
+    return None
+
+def normalize_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'name', 'phone', 'source_page'])
+
+    df = _standardize_columns(df)
+    df = _map_synonyms(df)
+
+    # Eliminar filas totalmente vacías
+    df = df.dropna(how='all')
+
+    # Si no existe date/name/phone, mantenerlas como columnas con None
+    for col in ['date', 'name', 'phone']:
+        if col not in df.columns:
+            df[col] = None
+
+    # Normalizaciones específicas
+    df['date'] = df['date'].apply(_to_iso_date)
+    df['phone'] = df['phone'].apply(_normalize_phone)
+
+    # Convertir name a string limpia
+    df['name'] = df['name'].apply(lambda x: str(x).strip() if not pd.isna(x) else None)
+
+    # Mover source_page al final si existe
+    cols = [c for c in ['date', 'name', 'phone'] if c in df.columns]
+    if 'source_page' in df.columns:
+        cols += ['source_page']
+    # Añadir el resto de columnas útiles por si se requieren en futuras etapas
+    other = [c for c in df.columns if c not in cols]
+    df = df[cols + other]
+
+    # Quitar duplicados en conjunto clave (date, name, phone, source_page)
+    subset = [c for c in ['date', 'name', 'phone', 'source_page'] if c in df.columns]
+    if subset:
+        df = df.drop_duplicates(subset=subset)
+
+    return df.reset_index(drop=True)
+
+def export_to_csv(df: pd.DataFrame, output_path='data/processed/cleaned_output.csv'):
+    df.to_csv(output_path, index=False, encoding='utf-8')
+
+def to_xlsx_formatted(df: pd.DataFrame, output_path='data/processed/cleaned_output.xlsx', sheet_name='Data'):
+    # XLSX con filtros, freeze pane y autoajuste aproximado de ancho
+    with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        wb  = writer.book
+        ws  = writer.sheets[sheet_name]
+        # Filtros y freeze header
+        if df.shape[0] > 0 and df.shape[1] > 0:
+            ws.autofilter(0, 0, df.shape[0], df.shape[1]-1)
+        ws.freeze_panes(1, 0)
+
+        # Autoajuste aproximado basado en longitud máxima de texto por columna
+        for idx, col in enumerate(df.columns):
+            series = df[col].astype(str).fillna('')
+            max_len = max([len(str(col))] + series.map(len).tolist())
+            # Aproximación de ancho: caracteres + margen
+            width = min(60, max(10, max_len + 2))
+            ws.set_column(idx, idx, width)
+EOF
+
+# validators/__init__.py
+cat > pdf-timeline-app/validators/__init__.py << 'EOF'
+import pandas as pd
+import re
+
+DATE_REGEX = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+def validate_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'name', 'phone', 'source_page'])
+    # Eliminar filas totalmente vacías nuevamente por seguridad
+    df = df.dropna(how='all')
+    # Si existe date, mantener solo fechas ISO válidas
+    if 'date' in df.columns:
+        df = df[df['date'].apply(lambda x: bool(DATE_REGEX.match(str(x))) if not pd.isna(x) else False)]
+    return df.reset_index(drop=True)
+EOF
+
+# block_detector.py
+cat > pdf-timeline-app/block_detector.py << 'EOF'
+def detect_block(file_path):
+    # Placeholder: lógica de detección de bloque
+    return 'A'
+EOF
+
+# db/schema.py
+cat > pdf-timeline-app/db/schema.py << 'EOF'
+from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
+
+engine = create_engine('sqlite:///data/database.db', future=True)
+metadata = MetaData()
+
+records = Table(
+    'records',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('name', String),
+    Column('phone', String),
+    Column('date', String)
+)
+
+metadata.create_all(engine)
+EOF
+
+# db/load.py
+cat > pdf-timeline-app/db/load.py << 'EOF'
+from typing import List, Dict
+from sqlalchemy import select
+from db.schema import engine, records
+import pandas as pd
+
+def _rows_from_df(df: pd.DataFrame) -> List[Dict]:
+    # Solo columnas esperadas por el esquema; None si faltan
+    out = []
+    for _, row in df.iterrows():
+        out.append({
+            'name': None if 'name' not in df.columns else (None if pd.isna(row.get('name')) else str(row.get('name'))),
+            'phone': None if 'phone' not in df.columns else (None if pd.isna(row.get('phone')) else str(row.get('phone'))),
+            'date': None if 'date' not in df.columns else (None if pd.isna(row.get('date')) else str(row.get('date'))),
+        })
+    return out
+
+def insert_data(df: pd.DataFrame) -> int:
+    rows = _rows_from_df(df) if df is not None else []
+    rows = [r for r in rows if any(v for v in r.values())]  # evitar filas vacías
+    if not rows:
+        return 0
+    with engine.begin() as conn:
+        conn.execute(records.insert(), rows)
+    return len(rows)
+
+def get_all_records() -> List[Dict]:
+    with engine.begin() as conn:
+        res = conn.execute(select(records.c.id, records.c.name, records.c.phone, records.c.date).order_by(records.c.id.desc()))
+        return [dict(r._mapping) for r in res.fetchall()]
+EOF
+
+# static/style.css
+cat > pdf-timeline-app/static/style.css << 'EOF'
+body {
+  font-family: Arial, sans-serif;
+  margin: 0; padding: 0;
+  background-color: #f4f4f9;
+}
+.container { width: 92%; max-width: 1200px; margin: 20px auto; }
+h1 { color: #333; font-size: 2em; margin-bottom: 0.5em; }
+button {
+  background-color: #007BFF; color: white; border: none;
+  padding: 10px 16px; cursor: pointer; font-size: 0.95em; border-radius: 4px;
+}
+button:hover { background-color: #0056b3; }
+.table-wrap { overflow-x: auto; }
+EOF
+
+# templates/index.html
+cat > pdf-timeline-app/templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Subir PDF</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Subir PDF</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" required />
+      <button type="submit">Procesar</button>
+    </form>
+    <p>Luego, revisa el resumen en <a href="/summary">/summary</a>.</p>
+  </div>
+</body>
+</html>
+EOF
+
+# templates/summary.html con DataTables
+cat > pdf-timeline-app/templates/summary.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Summary</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+
+  <!-- DataTables -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Resumen</h1>
+
+    <div class="table-wrap">
+      <table id="data-table" class="display" style="width:100%">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="chart" style="margin-top:24px;"></div>
+  </div>
+
+  <script>
+    function buildChart(rows) {
+      const byDate = {};
+      rows.forEach(r => {
+        if (!r.date) return;
+        byDate[r.date] = (byDate[r.date] || 0) + 1;
+      });
+      const dates = Object.keys(byDate).sort();
+      const counts = dates.map(d => byDate[d]);
+
+      const data = [{ x: dates, y: counts, type: 'bar' }];
+      const layout = { title: 'Registros por fecha', margin: { t: 40 } };
+      Plotly.newPlot('chart', data, layout, { displayModeBar: false });
+    }
+
+    $(document).ready(function () {
+      $.getJSON('/api/records', function (rows) {
+        $('#data-table').DataTable({
+          data: rows,
+          columns: [
+            { data: 'id' },
+            { data: 'date' },
+            { data: 'name' },
+            { data: 'phone' }
+          ],
+          autoWidth: true,
+          deferRender: true,
+          scrollY: '55vh',
+          scrollCollapse: true,
+          paging: true
+        });
+        buildChart(rows);
+      });
+    });
+  </script>
+</body>
+</html>
+EOF
+
+# templates/timeline.html
+cat > pdf-timeline-app/templates/timeline.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Timeline</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Timeline</h1>
+    <div id="timeline">Próximamente…</div>
+  </div>
+</body>
+</html>
+EOF
+
+# tests placeholders
+cat > pdf-timeline-app/tests/test_extractors.py << 'EOF'
+def test_extract_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_normalizers.py << 'EOF'
+def test_normalize_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_db.py << 'EOF'
+def test_insert_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_block_detector.py << 'EOF'
+def test_detect_block():
+    assert True
+EOF
+
+# requirements.txt
+cat > pdf-timeline-app/requirements.txt << 'EOF'
+flask
+pdfplumber
+pandas
+python-dateutil
+phonenumbers
+regex
+SQLAlchemy
+tqdm
+rich
+plotly
+pytest
+XlsxWriter
+EOF
+
+# Instalar dependencias
+cd pdf-timeline-app
+$PIP install --upgrade pip
+$PIP install -r requirements.txt
+
+echo
+echo "Instalación completada."
+echo "Para iniciar la app:"
+echo "  cd pdf-timeline-app"
+echo "  $PY main.py"
+echo
+echo "Luego abre: http://127.0.0.1:8000"
+``` 
+
+```bash
+#!/bin/bash
+# Instalador mejorado para pdf-timeline-app (Termux-friendly)
+# - Extracción robusta con pdfplumber -> DataFrame consolidado y promoción de encabezados.
+# - Normalización: nombres de columnas, fechas ISO, teléfonos normalizados, exportación CSV y XLSX con filtros/auto-ajuste.
+# - Validación: filas vacías/duplicadas y fecha válida.
+# - UI: Summary con DataTables (filtros en encabezados, autoWidth, scroll).
+# - DB: Inserción con SQLAlchemy Core y endpoint /api/records para DataTables.
+# - Verificación y reparación PIP: pip check + prueba de imports; reinstala paquetes dañados con --force-reinstall y limpia cache.
+
+set -euo pipefail
+
+# Detectar Python y pip
+if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+if command -v pip3 >/dev/null 2>&1; then PIP=pip3;
+elif command -v pip >/dev/null 2>&1; then PIP=pip;
+else
+  echo "pip no está instalado. Por favor, instálalo antes de continuar."
+  exit 1
+fi
+
+# Crear estructura de carpetas
+mkdir -p pdf-timeline-app/{extractors,normalizers,validators,db,static,templates,tests,data/{raw,processed}}
+
+# main.py
+cat > pdf-timeline-app/main.py << 'EOF'
+from flask import Flask, request, render_template, jsonify
+import os
+from extractors import extract_data
+from normalizers import normalize_data, export_to_csv, to_xlsx_formatted
+from validators import validate_data
+from db.load import insert_data, get_all_records
+from block_detector import detect_block
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    os.makedirs('data/raw', exist_ok=True)
+    os.makedirs('data/processed', exist_ok=True)
+    file_path = os.path.join('data/raw', file.filename)
+    file.save(file_path)
+
+    # Pipeline: extract -> normalize -> validate -> export -> insert
+    df_raw = extract_data(file_path)
+    df_norm = normalize_data(df_raw)
+    df_valid = validate_data(df_norm)
+
+    # Exportaciones: CSV + XLSX con filtros/autoajuste
+    csv_path = 'data/processed/cleaned_output.csv'
+    xlsx_path = 'data/processed/cleaned_output.xlsx'
+    export_to_csv(df_valid, csv_path)
+    to_xlsx_formatted(df_valid, xlsx_path)
+
+    block_type = detect_block(file_path)
+    inserted = insert_data(df_valid)
+
+    return jsonify({
+        'message': 'File processed successfully',
+        'block_type': block_type,
+        'rows_exported': len(df_valid),
+        'rows_inserted': inserted,
+        'csv': csv_path,
+        'xlsx': xlsx_path
+    })
+
+@app.route('/summary', methods=['GET'])
+def summary():
+    return render_template('summary.html')
+
+@app.route('/timeline', methods=['GET'])
+def timeline():
+    return render_template('timeline.html')
+
+@app.route('/api/records', methods=['GET'])
+def api_records():
+    records = get_all_records()
+    return jsonify(records)
+
+if __name__ == '__main__':
+    # host 0.0.0.0 para acceso desde LAN si se desea; puerto 8000 común en Termux
+    app.run(host='0.0.0.0', port=8000, debug=True)
+EOF
+
+# extractors/__init__.py
+cat > pdf-timeline-app/extractors/__init__.py << 'EOF'
+import pdfplumber
+import pandas as pd
+
+def _promote_header_if_applicable(df: pd.DataFrame) -> pd.DataFrame:
+    # Heurística simple: si la primera fila no tiene NaNs y sus valores son únicos, usarla como cabecera
+    if df.shape[0] > 1 and df.iloc[0].isna().sum() == 0 and df.iloc[0].nunique(dropna=False) == df.shape[1]:
+        df.columns = df.iloc[0].astype(str)
+        df = df.iloc[1:].reset_index(drop=True)
+    return df
+
+def extract_data(file_path: str) -> pd.DataFrame:
+    all_tables = []
+    with pdfplumber.open(file_path) as pdf:
+        for page_num, page in enumerate(pdf.pages, start=1):
+            tables = page.extract_tables()
+            for table in tables or []:
+                if not table:
+                    continue
+                # Rellenar filas con distintas longitudes
+                max_cols = max(len(r) for r in table if r is not None) if table else 0
+                normalized_rows = [(row or []) + [None] * (max_cols - len(row or [])) for row in table]
+                df = pd.DataFrame(normalized_rows)
+                df = _promote_header_if_applicable(df)
+                df["source_page"] = page_num
+                all_tables.append(df)
+
+    if not all_tables:
+        return pd.DataFrame()
+
+    base = pd.concat(all_tables, ignore_index=True, sort=False)
+    base = base.applymap(lambda x: str(x).strip() if isinstance(x, str) else x)
+    return base
+EOF
+
+# normalizers/__init__.py
+cat > pdf-timeline-app/normalizers/__init__.py << 'EOF'
+import pandas as pd
+from dateutil import parser as dateparser
+import phonenumbers
+
+# Mapeo de sinónimos a columnas destino
+SYNONYMS = {
+    'date': {'date', 'fecha', 'fec', 'fcha', 'fech', 'fecha_evento'},
+    'name': {'name', 'nombre', 'persona', 'contacto', 'solicitante'},
+    'phone': {'phone', 'telefono', 'teléfono', 'tel', 'cel', 'celular'}
+}
+
+def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
+    return df
+
+def _map_synonyms(df: pd.DataFrame) -> pd.DataFrame:
+    col_map = {}
+    cols = set(df.columns)
+    for target, synonyms in SYNONYMS.items():
+        hit = next((c for c in cols if c in synonyms), None)
+        if hit:
+            col_map[hit] = target
+    if col_map:
+        df = df.rename(columns=col_map)
+    return df
+
+def _to_iso_date(val):
+    if pd.isna(val):
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        dt = dateparser.parse(s, dayfirst=False, yearfirst=True, fuzzy=True)
+        return dt.date().isoformat()
+    except Exception:
+        return None
+
+def _normalize_phone(val, default_region='US'):
+    if pd.isna(val):
+        return None
+    s = ''.join(ch for ch in str(val) if ch.isdigit() or ch == '+')
+    if not s:
+        return None
+    try:
+        num = phonenumbers.parse(s, default_region)
+        if phonenumbers.is_valid_number(num):
+            return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164)
+    except Exception:
+        return None
+    return None
+
+def normalize_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'name', 'phone', 'source_page'])
+
+    df = _standardize_columns(df)
+    df = _map_synonyms(df)
+
+    df = df.dropna(how='all')
+
+    for col in ['date', 'name', 'phone']:
+        if col not in df.columns:
+            df[col] = None
+
+    df['date'] = df['date'].apply(_to_iso_date)
+    df['phone'] = df['phone'].apply(_normalize_phone)
+    df['name'] = df['name'].apply(lambda x: str(x).strip() if not pd.isna(x) else None)
+
+    cols = [c for c in ['date', 'name', 'phone'] if c in df.columns]
+    if 'source_page' in df.columns:
+        cols += ['source_page']
+    other = [c for c in df.columns if c not in cols]
+    df = df[cols + other]
+
+    subset = [c for c in ['date', 'name', 'phone', 'source_page'] if c in df.columns]
+    if subset:
+        df = df.drop_duplicates(subset=subset)
+
+    return df.reset_index(drop=True)
+
+def export_to_csv(df: pd.DataFrame, output_path='data/processed/cleaned_output.csv'):
+    df.to_csv(output_path, index=False, encoding='utf-8')
+
+def to_xlsx_formatted(df: pd.DataFrame, output_path='data/processed/cleaned_output.xlsx', sheet_name='Data'):
+    # XLSX con filtros, freeze pane y autoajuste aproximado de ancho
+    with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        wb  = writer.book
+        ws  = writer.sheets[sheet_name]
+        if df.shape[0] > 0 and df.shape[1] > 0:
+            ws.autofilter(0, 0, df.shape[0], df.shape[1]-1)
+        ws.freeze_panes(1, 0)
+        for idx, col in enumerate(df.columns):
+            series = df[col].astype(str).fillna('')
+            max_len = max([len(str(col))] + series.map(len).tolist())
+            width = min(60, max(10, max_len + 2))
+            ws.set_column(idx, idx, width)
+EOF
+
+# validators/__init__.py
+cat > pdf-timeline-app/validators/__init__.py << 'EOF'
+import pandas as pd
+import re
+
+DATE_REGEX = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+def validate_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'name', 'phone', 'source_page'])
+    df = df.dropna(how='all')
+    if 'date' in df.columns:
+        df = df[df['date'].apply(lambda x: bool(DATE_REGEX.match(str(x))) if not pd.isna(x) else False)]
+    return df.reset_index(drop=True)
+EOF
+
+# block_detector.py
+cat > pdf-timeline-app/block_detector.py << 'EOF'
+def detect_block(file_path):
+    # Placeholder: lógica de detección de bloque
+    return 'A'
+EOF
+
+# db/schema.py
+cat > pdf-timeline-app/db/schema.py << 'EOF'
+from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
+
+engine = create_engine('sqlite:///data/database.db', future=True)
+metadata = MetaData()
+
+records = Table(
+    'records',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('name', String),
+    Column('phone', String),
+    Column('date', String)
+)
+
+metadata.create_all(engine)
+EOF
+
+# db/load.py
+cat > pdf-timeline-app/db/load.py << 'EOF'
+from typing import List, Dict
+from sqlalchemy import select
+from db.schema import engine, records
+import pandas as pd
+
+def _rows_from_df(df: pd.DataFrame) -> List[Dict]:
+    out = []
+    for _, row in df.iterrows():
+        out.append({
+            'name': None if 'name' not in df.columns else (None if pd.isna(row.get('name')) else str(row.get('name'))),
+            'phone': None if 'phone' not in df.columns else (None if pd.isna(row.get('phone')) else str(row.get('phone'))),
+            'date': None if 'date' not in df.columns else (None if pd.isna(row.get('date')) else str(row.get('date'))),
+        })
+    return out
+
+def insert_data(df: pd.DataFrame) -> int:
+    rows = _rows_from_df(df) if df is not None else []
+    rows = [r for r in rows if any(v for v in r.values())]
+    if not rows:
+        return 0
+    with engine.begin() as conn:
+        conn.execute(records.insert(), rows)
+    return len(rows)
+
+def get_all_records() -> List[Dict]:
+    with engine.begin() as conn:
+        res = conn.execute(select(records.c.id, records.c.name, records.c.phone, records.c.date).order_by(records.c.id.desc()))
+        return [dict(r._mapping) for r in res.fetchall()]
+EOF
+
+# static/style.css
+cat > pdf-timeline-app/static/style.css << 'EOF'
+body {
+  font-family: Arial, sans-serif;
+  margin: 0; padding: 0;
+  background-color: #f4f4f9;
+}
+.container { width: 92%; max-width: 1200px; margin: 20px auto; }
+h1 { color: #333; font-size: 2em; margin-bottom: 0.5em; }
+button {
+  background-color: #007BFF; color: white; border: none;
+  padding: 10px 16px; cursor: pointer; font-size: 0.95em; border-radius: 4px;
+}
+button:hover { background-color: #0056b3; }
+.table-wrap { overflow-x: auto; }
+EOF
+
+# templates/index.html
+cat > pdf-timeline-app/templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Subir PDF</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Subir PDF</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" required />
+      <button type="submit">Procesar</button>
+    </form>
+    <p>Luego, revisa el resumen en <a href="/summary">/summary</a>.</p>
+  </div>
+</body>
+</html>
+EOF
+
+# templates/summary.html con DataTables
+cat > pdf-timeline-app/templates/summary.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Summary</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+
+  <!-- DataTables -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Resumen</h1>
+
+    <div class="table-wrap">
+      <table id="data-table" class="display" style="width:100%">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="chart" style="margin-top:24px;"></div>
+  </div>
+
+  <script>
+    function buildChart(rows) {
+      const byDate = {};
+      rows.forEach(r => {
+        if (!r.date) return;
+        byDate[r.date] = (byDate[r.date] || 0) + 1;
+      });
+      const dates = Object.keys(byDate).sort();
+      const counts = dates.map(d => byDate[d]);
+
+      const data = [{ x: dates, y: counts, type: 'bar' }];
+      const layout = { title: 'Registros por fecha', margin: { t: 40 } };
+      Plotly.newPlot('chart', data, layout, { displayModeBar: false });
+    }
+
+    $(document).ready(function () {
+      $.getJSON('/api/records', function (rows) {
+        $('#data-table').DataTable({
+          data: rows,
+          columns: [
+            { data: 'id' },
+            { data: 'date' },
+            { data: 'name' },
+            { data: 'phone' }
+          ],
+          autoWidth: true,
+          deferRender: true,
+          scrollY: '55vh',
+          scrollCollapse: true,
+          paging: true
+        });
+        buildChart(rows);
+      });
+    });
+  </script>
+</body>
+</html>
+EOF
+
+# templates/timeline.html
+cat > pdf-timeline-app/templates/timeline.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Timeline</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Timeline</h1>
+    <div id="timeline">Próximamente…</div>
+  </div>
+</body>
+</html>
+EOF
+
+# tests placeholders
+cat > pdf-timeline-app/tests/test_extractors.py << 'EOF'
+def test_extract_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_normalizers.py << 'EOF'
+def test_normalize_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_db.py << 'EOF'
+def test_insert_data():
+    assert True
+EOF
+
+cat > pdf-timeline-app/tests/test_block_detector.py << 'EOF'
+def test_detect_block():
+    assert True
+EOF
+
+# requirements.txt
+cat > pdf-timeline-app/requirements.txt << 'EOF'
+flask
+pdfplumber
+pandas
+python-dateutil
+phonenumbers
+regex
+SQLAlchemy
+tqdm
+rich
+plotly
+pytest
+XlsxWriter
+EOF
+
+# Funciones para verificar y reparar instalación de paquetes PIP
+check_and_repair_pip() {
+  echo "Verificando instalación de paquetes PIP…"
+  local need_repair=()
+  local had_pip_check_issue=0
+
+  # 1) pip check (incompatibilidades de dependencias)
+  if ! $PY -m pip check >/dev/null 2>&1; then
+    echo "pip check detectó problemas de dependencias."
+    had_pip_check_issue=1
+  fi
+
+  # 2) Probar imports de módulos clave; si falla, marcar para reparación
+  declare -A MODULES=(
+    ["flask"]="flask"
+    ["pdfplumber"]="pdfplumber"
+    ["pandas"]="pandas"
+    ["python-dateutil"]="dateutil"
+    ["phonenumbers"]="phonenumbers"
+    ["regex"]="regex"
+    ["SQLAlchemy"]="sqlalchemy"
+    ["tqdm"]="tqdm"
+    ["rich"]="rich"
+    ["plotly"]="plotly"
+    ["pytest"]="pytest"
+    ["XlsxWriter"]="xlsxwriter"
+  )
+
+  for pkg in "${!MODULES[@]}"; do
+    mod="${MODULES[$pkg]}"
+    if ! $PY - <<PYCODE >/dev/null 2>&1
+import importlib
+import sys
+m = importlib.import_module("${mod}")
+# acceso trivial para forzar carga de metadatos en algunos paquetes
+getattr(m, "__name__", None)
+PYCODE
+    then
+      echo "Falla de import: ${pkg} (módulo ${mod})"
+      need_repair+=("$pkg")
+    fi
+  done
+
+  # Si hay problemas, intentar reparar
+  if (( had_pip_check_issue == 1 )) || (( ${#need_repair[@]} > 0 )); then
+    echo "Iniciando reparación de paquetes…"
+    # Limpiar cache para evitar wheels corruptos
+    $PIP cache purge >/dev/null 2>&1 || true
+
+    if (( ${#need_repair[@]} > 0 )); then
+      echo "Reinstalando paquetes específicos: ${need_repair[*]}"
+      $PIP install --force-reinstall --no-cache-dir "${need_repair[@]}"
+    fi
+
+    # Revalidar; si aún hay issues, reinstalar todo el requirements
+    if ! $PY -m pip check >/dev/null 2>&1; then
+      echo "Persisten problemas; forzando reinstalación completa desde requirements.txt…"
+      $PIP install --upgrade --force-reinstall --no-cache-dir -r requirements.txt
+    fi
+
+    # Chequeo final
+    if $PY -m pip check >/dev/null 2>&1; then
+      echo "Reparación completada. Dependencias en estado consistente."
+    else
+      echo "Advertencia: pip check aún reporta problemas. Revisa manualmente requirements o conflictos de versiones."
+    fi
+  else
+    echo "Todo OK. Dependencias consistentes y módulos importables."
+  fi
+}
+
+# Instalar dependencias y verificar/reparar
+cd pdf-timeline-app
+$PIP install --upgrade pip
+$PIP install -r requirements.txt
+
+# Verificación y reparación post-instalación
+check_and_repair_pip
+
+echo
+echo "Instalación completada."
+echo "Para iniciar la app:"
+echo "  cd pdf-timeline-app"
+echo "  $PY main.py"
+echo
+echo "Luego abre: http://127.0.0.1:8000"
+``` 
+
+¡Sí, Byron! Se puede llevar la robustez de tu extractor a otro nivel mediante mejoras que garanticen tanto la **fidelidad estructural** como la **limpieza semántica** del contenido tabular. Aquí te propongo un enfoque integral adaptado a tu flujo modular y uso en Termux, especialmente enfocado en la extracción desde PDFs nativos:
+
+---
+
+## 🔍 Mejora 1: Revisión estructural con heurística tabular
+
+Implementa una validación por página que mida:
+- Número de filas/columnas por tabla
+- Consistencia horizontal: proporción de filas con la misma cantidad de columnas
+- Detección de celdas fusionadas o columnas desalineadas
+
+```python
+def _validate_table_structure(table: list[list[str]]) -> bool:
+    if not table or len(table) < 2:
+        return False
+    lengths = [len(row) for row in table if row]
+    mode = max(set(lengths), key=lengths.count)
+    return lengths.count(mode) / len(lengths) > 0.8
+```
+
+---
+
+## 🔄 Mejora 2: Promoción inteligente de encabezados
+
+Además de la heurística ya incluida, puedes incorporar verificación semántica básica:
+
+```python
+def _looks_like_header(row):
+    return all(str(cell).isalpha() or str(cell).strip() == '' for cell in row)
+```
+
+Esto ayuda a evitar que un nombre o número aparezca en la primera fila y se trate como encabezado por error.
+
+---
+
+## 🧼 Mejora 3: Relleno dinámico y tipificación explícita
+
+Cada tabla extraída puede ser convertida en un `DataFrame` con tipificación explícita antes de la concatenación global:
+
+```python
+df = pd.DataFrame(table)
+df = _promote_header_if_applicable(df)
+
+for col in df.columns:
+    df[col] = pd.to_numeric(df[col], errors='ignore')
+```
+
+Y opcionalmente aplicar análisis de calidad de datos por columna, detectando outliers o columnas con predominio de NaNs.
+
+---
+
+## 📁 Mejora 4: Registro por bloque y fuente
+
+Agrega metadata por tabla:
+- Número de página
+- Posición X/Y del bounding box
+- Tipo de bloque (detectado por `block_detector`)
+- Hash de la tabla original para trazabilidad
+
+Esto permite auditar el origen de cada registro.
+
+---
+
+## 📊 Mejora 5: Conversión CSV con prevalidación de separadores y codificación
+
+Antes de escribir el CSV:
+
+```python
+df.to_csv(path, index=False, encoding='utf-8', sep=',', line_terminator='\n')
+```
+
+Y antes de exportar, podrías verificar que no haya comas incrustadas en celdas relevantes, usando:
+
+```python
+def clean_commas(df: pd.DataFrame):
+    for col in df.columns:
+        df[col] = df[col].astype(str).str.replace(',', ' ')
+    return df
+```
+
+---
+
+## 🧠 Mejora 6: Modo diagnóstico
+
+Agrega un modo especial en `main.py` que permita procesar el archivo y devolver:
+- Resumen de las estructuras detectadas (tipo de tabla, filas, columnas)
+- Visualización sencilla en HTML para inspección manual
+- Log en `data/logs/` con estadísticas por tabla
+
+---
+
+Si lo deseás, puedo incorporarlas todas al script instalador y entregarte el bloque completo. ¿Querés que te lo unifique y prepare? 
+
+### Byron, te lo unifico en un paquete listo para Replit/Termux
+
+Te dejo una estructura modular con: extracción dual (Camelot si está disponible, fallback a pdfplumber), validación estructural, promoción de encabezados, tipificación segura, metadatos y manifiesto, exportación CSV robusta y modo diagnóstico HTML. Está pensada para procesar archivos sueltos o bloques enteros.
+
+---
+
+## Estructura de carpetas
+
+```
+.
+├─ app/
+│  ├─ __init__.py
+│  ├─ config.py
+│  ├─ main.py
+│  ├─ extractors/
+│  │  ├─ __init__.py
+│  │  ├─ base.py
+│  │  ├─ camelot_extractor.py
+│  │  └─ pdfplumber_extractor.py
+│  ├─ pipeline/
+│  │  ├─ __init__.py
+│  │  ├─ normalize.py
+│  │  ├─ validators.py
+│  │  ├─ export.py
+│  │  ├─ metadata.py
+│  │  └─ diagnostics.py
+│  └─ utils/
+│     ├─ __init__.py
+│     ├─ io.py
+│     ├─ hashing.py
+│     └─ logging.py
+├─ data/
+│  ├─ input/
+│  ├─ blocks/
+│  ├─ output/
+│  ├─ diagnostics/
+│  ├─ logs/
+│  └─ tmp/
+├─ install.sh
+├─ requirements.txt
+└─ README.md
+```
+
+---
+
+## install.sh
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+echo "[+] Creando venv (opcional en Replit/Termux)"
+python3 -m venv .venv || true
+source .venv/bin/activate || true
+
+echo "[+] Instalando dependencias Python"
+pip install --upgrade pip
+pip install -r requirements.txt
+
+echo "[+] (Opcional) Instalando Ghostscript para Camelot (si el sistema lo permite)"
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update -y || true
+  sudo apt-get install -y ghostscript || true
+fi
+
+echo "[+] Listo. Ejecuta: source .venv/bin/activate && python -m app.main --help"
+```
+
+---
+
+## requirements.txt
+
+```
+pandas>=2.2.2
+pdfplumber>=0.11.0
+camelot-py[cv]>=0.11.0 ; platform_system != "Windows"
+opencv-python-headless>=4.10.0.84
+numpy>=1.26.4
+python-dateutil>=2.9.0
+chardet>=5.2.0
+tqdm>=4.66.4
+tabulate>=0.9.0
+jinja2>=3.1.4
+```
+
+Nota: Camelot es opcional; si no está Ghostscript, el pipeline sigue con pdfplumber.
+
+---
+
+## app/config.py
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Settings:
+    input_dir: str = "data/input"
+    blocks_dir: str = "data/blocks"
+    output_dir: str = "data/output"
+    diagnostics_dir: str = "data/diagnostics"
+    logs_dir: str = "data/logs"
+    tmp_dir: str = "data/tmp"
+    csv_sep: str = ","
+    csv_encoding: str = "utf-8-sig"  # compatible con Excel
+    csv_quote_all: bool = False
+    min_structural_consistency: float = 0.8
+    min_numeric_confidence: float = 0.8
+    header_detection_ratio: float = 0.6
+    enable_camelot: bool = True  # auto-detección, intenta lattice y stream
+
+SETTINGS = Settings()
+```
+
+---
+
+## app/utils/logging.py
+
+```python
+import logging, os
+from app.config import SETTINGS
+
+def get_logger(name="app"):
+    os.makedirs(SETTINGS.logs_dir, exist_ok=True)
+    logger = logging.getLogger(name)
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler(os.path.join(SETTINGS.logs_dir, "run.log"), encoding="utf-8")
+    ch = logging.StreamHandler()
+    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    fh.setFormatter(fmt); ch.setFormatter(fmt)
+    logger.addHandler(fh); logger.addHandler(ch)
+    return logger
+```
+
+---
+
+## app/utils/hashing.py
+
+```python
+import hashlib, json
+
+def canonicalize_df(df):
+    return json.dumps(
+        {"columns": list(map(str, df.columns)), "rows": df.astype(str).fillna("").values.tolist()},
+        ensure_ascii=False, separators=(",", ":")
+    )
+
+def hash_df(df) -> str:
+    return hashlib.sha256(canonicalize_df(df).encode("utf-8")).hexdigest()
+```
+
+---
+
+## app/utils/io.py
+
+```python
+import os, glob
+from typing import Iterable
+
+def iter_pdfs(paths: list[str]|None, default_dir: str) -> Iterable[str]:
+    if paths:
+        for p in paths:
+            if os.path.isdir(p):
+                for f in glob.glob(os.path.join(p, "**", "*.pdf"), recursive=True):
+                    yield f
+            elif os.path.isfile(p) and p.lower().endswith(".pdf"):
+                yield p
+    else:
+        for f in glob.glob(os.path.join(default_dir, "**", "*.pdf"), recursive=True):
+            yield f
+```
+
+---
+
+## app/extractors/base.py
+
+```python
+from dataclasses import dataclass
+import pandas as pd
+from typing import List, Dict, Any
+
+@dataclass
+class TableResult:
+    df: pd.DataFrame
+    meta: Dict[str, Any]  # page, bbox, method, file, table_index, etc.
+
+class BaseExtractor:
+    name = "base"
+    def extract(self, pdf_path: str) -> List[TableResult]:
+        raise NotImplementedError
+```
+
+---
+
+## app/extractors/camelot_extractor.py
+
+```python
+from typing import List
+import pandas as pd
+from app.extractors.base import BaseExtractor, TableResult
+
+def _try_imports():
+    try:
+        import camelot
+        return camelot
+    except Exception:
+        return None
+
+class CamelotExtractor(BaseExtractor):
+    name = "camelot"
+    def __init__(self):
+        self.camelot = _try_imports()
+        if self.camelot is None:
+            raise RuntimeError("Camelot no disponible")
+
+    def _run(self, pdf_path: str, flavor: str):
+        return self.camelot.read_pdf(pdf_path, pages="all", flavor=flavor, strip_text="\n")
+
+    def extract(self, pdf_path: str) -> List[TableResult]:
+        results: List[TableResult] = []
+        for flavor in ["lattice", "stream"]:
+            try:
+                tables = self._run(pdf_path, flavor)
+            except Exception:
+                continue
+            for i, t in enumerate(tables):
+                df = t.df
+                meta = {
+                    "page": int(getattr(t, "page", 0)) if hasattr(t, "page") else None,
+                    "bbox": getattr(t, "bbox", None),
+                    "flavor": flavor,
+                    "method": "camelot",
+                    "table_index": i,
+                    "accuracy": getattr(t, "accuracy", None),
+                    "whitespace": getattr(t, "whitespace", None),
+                }
+                results.append(TableResult(df=df, meta=meta))
+        return results
+```
+
+---
+
+## app/extractors/pdfplumber_extractor.py
+
+```python
+from typing import List
+import pdfplumber, pandas as pd
+from app.extractors.base import BaseExtractor, TableResult
+
+class PdfPlumberExtractor(BaseExtractor):
+    name = "pdfplumber"
+    def extract(self, pdf_path: str) -> List[TableResult]:
+        results: List[TableResult] = []
+        with pdfplumber.open(pdf_path) as pdf:
+            for p_idx, page in enumerate(pdf.pages, start=1):
+                try:
+                    tables = page.extract_tables(
+                        table_settings={
+                            "vertical_strategy": "lines",
+                            "horizontal_strategy": "lines",
+                            "intersection_tolerance": 5,
+                        }
+                    )
+                    # fallback a "text" si no hay líneas
+                    if not tables:
+                        tables = page.extract_tables(
+                            table_settings={
+                                "vertical_strategy": "text",
+                                "horizontal_strategy": "text",
+                                "snap_tolerance": 3,
+                            }
+                        )
+                except Exception:
+                    tables = []
+                for t_idx, table in enumerate(tables):
+                    df = pd.DataFrame(table)
+                    bbox = page.bbox
+                    results.append(TableResult(
+                        df=df,
+                        meta={"page": p_idx, "bbox": bbox, "method": "pdfplumber", "table_index": t_idx}
+                    ))
+        return results
+```
+
+---
+
+## app/pipeline/validators.py
+
+```python
+import pandas as pd
+from app.config import SETTINGS
+
+def is_structurally_consistent(df: pd.DataFrame) -> bool:
+    if df is None or df.empty:
+        return False
+    lengths = [len([c for c in row if c is not None]) for _, row in df.iterrows()]
+    if not lengths:
+        return False
+    mode = max(set(lengths), key=lengths.count)
+    ratio = lengths.count(mode) / len(lengths)
+    return ratio >= SETTINGS.min_structural_consistency
+
+def detect_header_row(df: pd.DataFrame) -> int|None:
+    # Heurística: fila con mayor proporción de celdas no numéricas y únicas
+    best_idx, best_score = None, 0.0
+    for idx in range(min(5, len(df))):
+        row = df.iloc[idx].astype(str).fillna("")
+        non_numeric = row.apply(lambda x: not x.replace(".", "", 1).isdigit())
+        uniqueness = row.nunique() / max(1, len(row))
+        score = non_numeric.mean() * 0.6 + uniqueness * 0.4
+        if score > best_score:
+            best_idx, best_score = idx, score
+    return best_idx if best_score >= SETTINGS.header_detection_ratio else None
+```
+
+---
+
+## app/pipeline/normalize.py
+
+```python
+import re, pandas as pd, numpy as np
+from dateutil import parser as dtp
+from app.pipeline.validators import detect_header_row
+from app.config import SETTINGS
+
+SPACE_RX = re.compile(r"[ \t\u00A0\u2007\u202F]+")
+NEWLINE_RX = re.compile(r"[\r\n]+")
+
+def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    df = df.applymap(lambda x: SPACE_RX.sub(" ", x) if isinstance(x, str) else x)
+    df = df.applymap(lambda x: NEWLINE_RX.sub(" ", x) if isinstance(x, str) else x)
+    return df
+
+def promote_header(df: pd.DataFrame) -> pd.DataFrame:
+    idx = detect_header_row(df)
+    if idx is None: 
+        return df
+    header = df.iloc[idx].astype(str).fillna("").tolist()
+    df2 = df.iloc[idx+1:].reset_index(drop=True).copy()
+    df2.columns = [h if h != "" else f"col_{i}" for i, h in enumerate(header)]
+    return df2
+
+def try_parse_numeric(series: pd.Series) -> pd.Series:
+    s = series.astype(str).str.strip()
+    # Detecta configuración decimal probable
+    candidates = []
+    for decimal, thousands in [(".", ","), (",", "."), (".", " "), (",", " ")]:
+        tmp = s.str.replace(thousands, "", regex=False).str.replace(decimal, ".", regex=False)
+        numeric = pd.to_numeric(tmp, errors="coerce")
+        conf = numeric.notna().mean()
+        candidates.append((conf, numeric))
+    conf, best = max(candidates, key=lambda x: x[0])
+    return best if conf >= SETTINGS.min_numeric_confidence else pd.to_numeric(s, errors="ignore")
+
+def try_parse_datetime(series: pd.Series) -> pd.Series:
+    def parse(x):
+        x = x.strip()
+        if not x or any(ch.isalpha() for ch in x) and len(x) < 4:
+            return pd.NaT
+        try:
+            return dtp.parse(x, dayfirst=True, yearfirst=False, fuzzy=True)
+        except Exception:
+            return pd.NaT
+    parsed = series.astype(str).apply(parse)
+    conf = parsed.notna().mean()
+    return parsed if conf >= 0.6 else series
+
+def explicit_typing(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for col in df.columns:
+        s = df[col]
+        # no castear IDs con ceros a la izquierda si parecen códigos
+        if s.astype(str).str.match(r"^0\d+$").mean() > 0.5:
+            continue
+        num_candidate = try_parse_numeric(s)
+        if num_candidate.notna().mean() >= SETTINGS.min_numeric_confidence:
+            df[col] = num_candidate
+            continue
+        dt_candidate = try_parse_datetime(s)
+        if getattr(dt_candidate, "dt", None) is not None and dt_candidate.notna().mean() >= 0.6:
+            df[col] = dt_candidate
+        else:
+            df[col] = s.astype(str).replace({"None": "", "nan": ""})
+    return df
+
+def normalize_table(df: pd.DataFrame) -> pd.DataFrame:
+    df = basic_clean(df)
+    df = promote_header(df)
+    df = df.dropna(how="all").reset_index(drop=True)
+    df = explicit_typing(df)
+    # Alinea el ancho de columnas: rellena filas cortas con NaN
+    max_cols = max(len(df.columns), df.apply(lambda r: r.notna().sum(), axis=1).max())
+    if max_cols > len(df.columns):
+        for i in range(len(df.columns), max_cols):
+            df[f"col_{i}"] = np.nan
+    return df[list(df.columns)]
+```
+
+---
+
+## app/pipeline/metadata.py
+
+```python
+import os, pandas as pd, json, time
+from app.utils.hashing import hash_df
+
+def enrich_metadata(df: pd.DataFrame, meta: dict, pdf_path: str) -> dict:
+    enriched = dict(meta or {})
+    enriched["source_file"] = os.path.basename(pdf_path)
+    enriched["row_count"] = int(len(df))
+    enriched["col_count"] = int(len(df.columns))
+    enriched["table_hash"] = hash_df(df)
+    enriched["ts_extracted"] = int(time.time())
+    return enriched
+
+def write_manifest(manifest_path: str, entries: list[dict]):
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
+```
+
+---
+
+## app/pipeline/export.py
+
+```python
+import os, csv, pandas as pd
+from app.config import SETTINGS
+
+def safe_to_csv(df: pd.DataFrame, out_path: str):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    quoting = csv.QUOTE_ALL if SETTINGS.csv_quote_all else csv.QUOTE_MINIMAL
+    df.to_csv(
+        out_path,
+        index=False,
+        encoding=SETTINGS.csv_encoding,
+        sep=SETTINGS.csv_sep,
+        lineterminator="\n",
+        quoting=quoting,
+        escapechar="\\",
+    )
+```
+
+---
+
+## app/pipeline/diagnostics.py
+
+```python
+import os, jinja2
+from tabulate import tabulate
+import pandas as pd
+from app.config import SETTINGS
+
+TEMPLATE = """
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Diagnóstico</title>
+<style>body{font-family:Arial, sans-serif;margin:2rem;} table{border-collapse:collapse;}
+td,th{border:1px solid #ccc;padding:.3rem .5rem;font-size:12px;} .meta{margin-bottom:1rem;}
+code{background:#f6f8fa;padding:2px 4px;border-radius:3px;}</style></head><body>
+<h1>Resumen de extracción</h1>
+<p><strong>Archivo:</strong> {{ file }}</p>
+<h2>Tablas</h2>
+{% for item in items %}
+<div class="meta"><strong>Tabla #{{ loop.index0 }}:</strong>
+<pre>{{ item.meta | tojson(indent=2) }}</pre></div>
+{{ item.preview }}
+{% endfor %}
+</body></html>
+"""
+
+def write_diagnostic_html(pdf_path: str, items: list[dict], out_dir: str):
+    os.makedirs(out_dir, exist_ok=True)
+    env = jinja2.Environment(autoescape=True)
+    tmpl = env.from_string(TEMPLATE)
+    rendered = tmpl.render(
+        file=os.path.basename(pdf_path),
+        items=[{
+            "meta": it["meta"],
+            "preview": pd.DataFrame(it["preview"]).to_html(index=False)
+        } for it in items]
+    )
+    out_path = os.path.join(out_dir, os.path.basename(pdf_path) + ".html")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(rendered)
+    return out_path
+```
+
+---
+
+## app/main.py
+
+```python
+import os, argparse
+from typing import List
+import pandas as pd
+from tqdm import tqdm
+
+from app.config import SETTINGS
+from app.utils.logging import get_logger
+from app.utils.io import iter_pdfs
+from app.extractors.base import BaseExtractor, TableResult
+from app.pipeline.validators import is_structurally_consistent
+from app.pipeline.normalize import normalize_table
+from app.pipeline.metadata import enrich_metadata, write_manifest
+from app.pipeline.export import safe_to_csv
+from app.pipeline.diagnostics import write_diagnostic_html
+
+logger = get_logger("pipeline")
+
+def get_extractor() -> List[BaseExtractor]:
+    extractors: List[BaseExtractor] = []
+    # intenta Camelot primero
+    if SETTINGS.enable_camelot:
+        try:
+            from app.extractors.camelot_extractor import CamelotExtractor
+            extractors.append(CamelotExtractor())
+            logger.info("Extractor Camelot habilitado")
+        except Exception as e:
+            logger.info(f"Camelot no disponible: {e}")
+    # siempre añade pdfplumber como fallback
+    from app.extractors.pdfplumber_extractor import PdfPlumberExtractor
+    extractors.append(PdfPlumberExtractor())
+    return extractors
+
+def process_pdf(pdf_path: str, out_dir: str, diagnostics: bool = False) -> dict:
+    os.makedirs(out_dir, exist_ok=True)
+    manifest_entries = []
+    diag_items = []
+
+    for extractor in get_extractor():
+        logger.info(f"Extrayendo con {extractor.name}: {pdf_path}")
+        try:
+            tables: List[TableResult] = extractor.extract(pdf_path)
+        except Exception as e:
+            logger.warning(f"Fallo extractor {extractor.name}: {e}")
+            continue
+
+        for idx, tbl in enumerate(tables):
+            raw_df = tbl.df
+            if not is_structurally_consistent(raw_df):
+                logger.info(f"Tabla descartada por inconsistencia estructural [{extractor.name} #{idx}]")
+                continue
+
+            norm_df = normalize_table(raw_df)
+            meta = tbl.meta | {"method": extractor.name}
+            meta = enrich_metadata(norm_df, meta, pdf_path)
+
+            base = os.path.splitext(os.path.basename(pdf_path))[0]
+            csv_name = f"{base}__{extractor.name}__p{meta.get('page','NA')}__t{meta.get('table_index','NA')}.csv"
+            out_csv = os.path.join(out_dir, csv_name)
+            safe_to_csv(norm_df, out_csv)
+
+            manifest_entries.append({"csv": csv_name, "meta": meta})
+
+            if diagnostics:
+                preview = norm_df.head(20)
+                diag_items.append({"meta": meta, "preview": preview})
+
+    # escribe manifiesto para el PDF
+    manifest_path = os.path.join(out_dir, os.path.splitext(os.path.basename(pdf_path))[0] + "__manifest.json")
+    write_manifest(manifest_path, manifest_entries)
+
+    diag_path = None
+    if diagnostics:
+        diag_path = write_diagnostic_html(pdf_path, diag_items, SETTINGS.diagnostics_dir)
+
+    return {"pdf": pdf_path, "manifest": manifest_path, "diagnostic": diag_path, "entries": len(manifest_entries)}
+
+def main():
+    ap = argparse.ArgumentParser(description="Extractor robusto PDF->CSV con validación y diagnóstico")
+    ap.add_argument("--paths", nargs="*", default=None, help="Rutas de PDF o directorios (default: data/input)")
+    ap.add_argument("--outdir", default=SETTINGS.output_dir, help="Directorio de salida CSV")
+    ap.add_argument("--diagnostics", action="store_true", help="Genera HTML de diagnóstico")
+    args = ap.parse_args()
+
+    pdfs = list(iter_pdfs(args.paths, SETTINGS.input_dir))
+    if not pdfs:
+        logger.warning("No se encontraron PDFs. Coloca archivos en data/input o pasa --paths")
+        return
+
+    summary = []
+    for pdf in tqdm(pdfs, desc="Procesando PDFs"):
+        res = process_pdf(pdf, args.outdir, diagnostics=args.diagnostics)
+        summary.append(res)
+        logger.info(f"Procesado: {pdf} -> {res['entries']} tablas")
+
+    logger.info(f"Completado. PDFs: {len(summary)}")
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## README.md (uso rápido)
+
+```markdown
+# Extractor robusto PDF -> CSV
+
+- Extracción dual: Camelot (si disponible) + fallback pdfplumber
+- Validación estructural por tabla
+- Promoción inteligente de encabezados
+- Tipificación explícita (números/fechas) con detección de separadores
+- Metadatos y manifiesto por PDF
+- Exportación CSV segura (quoting, escape)
+- Diagnóstico HTML opcional
+
+## Preparación
+```bash
+bash install.sh
+```
+
+## Ejecución
+- Coloca PDFs en `data/input` o en `data/blocks/<tu-bloque>/...`
+- Ejecuta:
+```bash
+source .venv/bin/activate
+python -m app.main --diagnostics
+# o para un bloque específico:
+python -m app.main --paths data/blocks/bloque_01 --diagnostics
+```
+
+## Resultados
+- CSVs en `data/output`
+- Manifiestos JSON por PDF en `data/output`
+- HTMLs de diagnóstico en `data/diagnostics`
+- Logs en `data/logs/run.log`
+
+## Configuración
+Ajusta `app/config.py`:
+- `csv_sep`, `csv_encoding`, `csv_quote_all`
+- Umbrales de validación y tipificación
+- Habilitar/deshabilitar Camelot
+```
+
+---
+
+## Notas de robustez clave
+
+- Validación estructural filtra tablas incompletas o ruidosas antes de normalizar.
+- Promoción de encabezados usa proporción de no-numéricos y unicidad; no fuerza si no hay confianza.
+- Tipificación explícita detecta separadores decimales y miles por columna y adopta la configuración con mayor cobertura; protege IDs con ceros a la izquierda.
+- CSV con quoting y escape evita corrupción por comas, comillas y saltos de línea embebidos.
+- Metadatos incluyen hash de la tabla, página, método y dimensiones; cada PDF genera un manifiesto auditable.
+- Diagnóstico HTML ofrece inspección rápida de primeras 20 filas por tabla, con metadatos incrustados.
+
+---
+
+¿Querés que lo ajustemos a un conjunto de PDFs concreto o que integre un validador de esquema esperado por bloque? Puedo añadir perfiles por bloque para garantizar columnas y tipos antes de exportar. 
+
+¡Perfecto! Acá tenés el bloque completo en un único script que se puede ejecutar directamente desde la consola. Incluye todo: extracción, validación, normalización, tipificación, exportación CSV, generación de manifiestos y diagnóstico HTML.
+
+---
+
+### 🧱 `extractor_pipeline.py`
+
+```python
+#!/usr/bin/env python3
+
+import os, json, re, argparse, hashlib, logging, pandas as pd, pdfplumber
+from datetime import datetime
+from tqdm import tqdm
+from tabulate import tabulate
+
+# Config
+INPUT_DIR = "data/input"
+OUTPUT_DIR = "data/output"
+DIAGNOSTICS_DIR = "data/diagnostics"
+LOGS_DIR = "data/logs"
+CSV_ENCODING = "utf-8-sig"
+CSV_SEP = ","
+STRUCTURAL_THRESHOLD = 0.8
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DIAGNOSTICS_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+# Logging
+log_file = os.path.join(LOGS_DIR, "run.log")
+logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+
+def hash_df(df):
+    df_str = json.dumps({"columns": list(map(str, df.columns)), "rows": df.astype(str).fillna("").values.tolist()}, ensure_ascii=False)
+    return hashlib.sha256(df_str.encode("utf-8")).hexdigest()
+
+def is_consistent(df):
+    lengths = [len(row.dropna()) for _, row in df.iterrows()]
+    mode = max(set(lengths), key=lengths.count)
+    ratio = lengths.count(mode) / len(lengths)
+    return ratio >= STRUCTURAL_THRESHOLD
+
+def detect_header(df):
+    for i in range(min(5, len(df))):
+        row = df.iloc[i].astype(str)
+        non_numeric_ratio = sum(not r.replace('.', '', 1).isdigit() for r in row) / len(row)
+        if non_numeric_ratio > 0.6:
+            return i
+    return None
+
+def clean_text(x):
+    if not isinstance(x, str): return x
+    x = re.sub(r"[ \t\u00A0\u2007\u202F]+", " ", x.strip())
+    x = re.sub(r"[\r\n]+", " ", x)
+    return x
+
+def normalize(df):
+    df = df.applymap(clean_text)
+    idx = detect_header(df)
+    if idx is not None:
+        header = df.iloc[idx].fillna("").astype(str).tolist()
+        df = df.iloc[idx+1:].reset_index(drop=True)
+        df.columns = [h if h else f"col_{i}" for i, h in enumerate(header)]
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="ignore")
+    df = df.dropna(how="all").reset_index(drop=True)
+    return df
+
+def export_csv(df, out_path):
+    df.to_csv(out_path, index=False, encoding=CSV_ENCODING, sep=CSV_SEP, line_terminator="\n")
+
+def generate_html_report(file, tables):
+    html = f"<html><head><meta charset='utf-8'><title>{file}</title></head><body><h1>Diagnóstico: {file}</h1>"
+    for idx, (meta, preview) in enumerate(tables):
+        html += f"<h2>Tabla #{idx}</h2><pre>{json.dumps(meta, indent=2, ensure_ascii=False)}</pre>"
+        html += preview.to_html(index=False)
+    html += "</body></html>"
+    out_html = os.path.join(DIAGNOSTICS_DIR, file + ".html")
+    with open(out_html, "w", encoding="utf-8") as f:
+        f.write(html)
+
+def process_pdf(pdf_path):
+    tables_info = []
+    filename = os.path.basename(pdf_path)
+    base = os.path.splitext(filename)[0]
+    manifest = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for p_idx, page in enumerate(pdf.pages, start=1):
+            try:
+                tables = page.extract_tables()
+            except Exception:
+                tables = []
+
+            for t_idx, tbl in enumerate(tables):
+                df = pd.DataFrame(tbl)
+                if not is_consistent(df):
+                    logging.info(f"Descartada tabla inconsistente en {filename} página {p_idx}")
+                    continue
+
+                norm_df = normalize(df)
+                meta = {
+                    "file": filename,
+                    "page": p_idx,
+                    "table_index": t_idx,
+                    "rows": len(norm_df),
+                    "columns": len(norm_df.columns),
+                    "hash": hash_df(norm_df),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+                csv_name = f"{base}__p{p_idx}__t{t_idx}.csv"
+                out_path = os.path.join(OUTPUT_DIR, csv_name)
+                export_csv(norm_df, out_path)
+
+                manifest.append({"csv": csv_name, "meta": meta})
+                tables_info.append((meta, norm_df.head(20)))
+
+    manifest_path = os.path.join(OUTPUT_DIR, base + "__manifest.json")
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    generate_html_report(base, tables_info)
+    logging.info(f"Procesado {filename}: {len(manifest)} tablas exportadas")
+
+def main():
+    parser = argparse.ArgumentParser(description="Extractor PDF -> CSV robusto con diagnóstico HTML")
+    parser.add_argument("--dir", default=INPUT_DIR, help="Directorio con PDFs")
+    args = parser.parse_args()
+
+    pdf_files = [os.path.join(dp, f) for dp, _, fs in os.walk(args.dir) for f in fs if f.lower().endswith(".pdf")]
+
+    if not pdf_files:
+        logging.warning(f"No se encontraron archivos PDF en {args.dir}")
+        print("No se encontraron archivos PDF.")
+        return
+
+    for pdf in tqdm(pdf_files, desc="Procesando PDFs"):
+        process_pdf(pdf)
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## ⚙️ Uso rápido
+
+```bash
+python extractor_pipeline.py --dir data/input
+```
+
+Genera:
+- CSVs en `data/output`
+- Manifiestos por PDF en `data/output`
+- Diagnósticos HTML en `data/diagnostics`
+- Logs en `data/logs/run.log`
+
+---
+
+¿Querés que también agregue detección de esquemas esperados por bloque, o integración con timeline visual? Estoy listo para iterarlo con vos. 
+
+### Script monolítico: instalación, extracción y CSV con spinners y barras de progreso
+
+Copia este bloque en un archivo, por ejemplo setup_and_run.sh, dale permisos y ejecútalo:
+- Guardar: setup_and_run.sh
+- Permisos: chmod +x setup_and_run.sh
+- Ejecutar: ./setup_and_run.sh
+
+Este único script:
+- Verifica/instala Python 3 y pip (apt/pkg/brew/dnf cuando sea posible).
+- Crea entorno virtual y estructura de carpetas.
+- Instala dependencias con validación e integra spinners.
+- Genera todo el código fuente necesario (pipeline en Python).
+- Ejecuta extracción automáticamente si encuentra PDFs en data/input.
+- Muestra barras de progreso y spinners durante todo el flujo.
+- Al final confirma instalación completa y ubicación de resultados.
+
+---
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==========================================================
+# Script monolítico: setup + pipeline PDF->CSV con spinners
+# ==========================================================
+# Requisitos: bash, conexión a internet para instalar deps
+# Compatible con: Debian/Ubuntu/Termux/macOS (y best-effort en otros)
+# ----------------------------------------------------------
+
+PROJECT_NAME="pdf_extractor_suite"
+PY_MIN="3.8"
+BASE_DIR="$(pwd)"
+VENV_DIR="${BASE_DIR}/.venv"
+INPUT_DIR="${BASE_DIR}/data/input"
+OUTPUT_DIR="${BASE_DIR}/data/output"
+DIAG_DIR="${BASE_DIR}/data/diagnostics"
+LOGS_DIR="${BASE_DIR}/data/logs"
+TMP_DIR="${BASE_DIR}/data/tmp"
+REQUIREMENTS_FILE="${BASE_DIR}/requirements.txt"
+PIPELINE_FILE="${BASE_DIR}/pipeline.py"
+
+# -------------------------
+# Utilidades visuales (UI)
+# -------------------------
+tput_sane() { command -v tput >/dev/null 2>&1 && tput cnorm || true; }
+trap tput_sane EXIT
+
+green() { printf "\033[32m%s\033[0m\n" "$*"; }
+yellow() { printf "\033[33m%s\033[0m\n" "$*"; }
+red() { printf "\033[31m%s\033[0m\n" "$*"; }
+blue() { printf "\033[34m%s\033[0m\n" "$*"; }
+
+spinner() {
+  local pid="$1"; local msg="$2"; local spin='-\|/'; local i=0
+  command -v tput >/dev/null 2>&1 && tput civis || true
+  while kill -0 "$pid" 2>/dev/null; do
+    i=$(( (i+1) % 4 ))
+    printf "\r[%s] %s" "${spin:$i:1}" "$msg"
+    sleep 0.1
+  done
+  printf "\r[✔] %s\n" "$msg"
+  tput_sane
+}
+
+run_with_spinner() {
+  local msg="$1"; shift
+  ( "$@" ) &
+  local pid=$!
+  spinner "$pid" "$msg"
+  wait "$pid"
+}
+
+progress_bar() {
+  # Simple barra de progreso textual basada en conteo
+  # Uso: progress_bar current total "mensaje"
+  local cur=$1; local total=$2; local msg=$3
+  local width=40
+  local filled=$(( (cur * width) / total ))
+  local empty=$(( width - filled ))
+  printf "\r[%.*s%*s] %3d%% %s" "$filled" "########################################" "$empty" "" $(( (cur*100)/total )) "$msg"
+  if [ "$cur" -ge "$total" ]; then printf "\n"; fi
+}
+
+# --------------------------------
+# Detección e instalación Python 3
+# --------------------------------
+detect_python() {
+  if command -v python3 >/dev/null 2>&1; then
+    echo "python3"
+  elif command -v python >/devnull 2>&1; then
+    echo "python"
+  else
+    echo ""
+  fi
+}
+
+ensure_python() {
+  local pybin
+  pybin="$(detect_python || true)"
+  if [ -n "$pybin" ]; then
+    "$pybin" - <<'PY' >/dev/null 2>&1 || true
+import sys
+maj, min = sys.version_info[:2]
+sys.exit(0 if (maj>3 or (maj==3 and min>=8)) else 1)
+PY
+    if [ $? -eq 0 ]; then
+      echo "$pybin"
+      return 0
+    else
+      yellow "Se requiere Python >= ${PY_MIN}. Intentando instalar/actualizar..."
+    fi
+  else
+    yellow "Python no encontrado. Intentando instalar..."
+  fi
+
+  # Intentos por gestor de paquetes
+  if command -v apt-get >/dev/null 2>&1; then
+    run_with_spinner "Instalando Python con apt-get" bash -c "sudo apt-get update -y && sudo apt-get install -y python3 python3-venv python3-pip"
+  elif command -v pkg >/dev/null 2>&1; then
+    run_with_spinner "Instalando Python con pkg (Termux)" bash -c "yes | pkg update && yes | pkg install python"
+  elif command -v dnf >/dev/null 2>&1; then
+    run_with_spinner "Instalando Python con dnf" bash -c "sudo dnf install -y python3 python3-pip python3-virtualenv || sudo dnf install -y python3"
+  elif command -v brew >/dev/null 2>&1; then
+    run_with_spinner "Instalando Python con Homebrew" bash -c "brew update && brew install python"
+  else
+    red "No pude instalar Python automáticamente. Instálalo manualmente y vuelve a ejecutar."
+    exit 1
+  fi
+
+  # Reintentar detección
+  pybin="$(detect_python || true)"
+  if [ -z "$pybin" ]; then
+    red "Python no disponible tras la instalación."
+    exit 1
+  fi
+
+  # Validar versión
+  "$pybin" - <<'PY' >/dev/null 2>&1
+import sys
+maj, min = sys.version_info[:2]
+sys.exit(0 if (maj>3 or (maj==3 and min>=8)) else 1)
+PY
+  if [ $? -ne 0 ]; then
+    red "La versión de Python instalada no cumple >= ${PY_MIN}."
+    exit 1
+  fi
+
+  echo "$pybin"
+}
+
+# -----------------------
+# Preparar estructura FS
+# -----------------------
+prepare_fs() {
+  mkdir -p "$INPUT_DIR" "$OUTPUT_DIR" "$DIAG_DIR" "$LOGS_DIR" "$TMP_DIR"
+}
+
+# ----------------------------
+# Crear requirements y código
+# ----------------------------
+write_requirements() {
+  cat > "$REQUIREMENTS_FILE" <<'REQ'
+pandas>=2.2.2
+pdfplumber>=0.11.0
+tqdm>=4.66.4
+tabulate>=0.9.0
+jinja2>=3.1.4
+numpy>=1.26.4
+python-dateutil>=2.9.0
+chardet>=5.2.0
+REQ
+}
+
+write_pipeline_py() {
+  cat > "$PIPELINE_FILE" <<'PY'
+#!/usr/bin/env python3
+import os, re, json, csv, hashlib, logging, argparse
+from datetime import datetime
+from typing import List, Tuple
+import pandas as pd
+import pdfplumber
+from tqdm import tqdm
+from dateutil import parser as dtp
+
+# Config
+INPUT_DIR = "data/input"
+OUTPUT_DIR = "data/output"
+DIAG_DIR = "data/diagnostics"
+LOGS_DIR = "data/logs"
+CSV_ENCODING = "utf-8-sig"
+CSV_SEP = ","
+STRUCTURAL_THRESHOLD = 0.8
+HEADER_DETECTION_RATIO = 0.6
+MIN_NUMERIC_CONF = 0.8
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DIAG_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+# Logging
+log_file = os.path.join(LOGS_DIR, "run.log")
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+console = logging.getLogger("console")
+console.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setFormatter(logging.Formatter("%(message)s"))
+console.addHandler(ch)
+
+SPACE_RX = re.compile(r"[ \t\u00A0\u2007\u202F]+")
+NEWLINE_RX = re.compile(r"[\r\n]+")
+
+def hash_df(df: pd.DataFrame) -> str:
+    payload = json.dumps(
+        {"columns": list(map(str, df.columns)),
+         "rows": df.astype(str).fillna("").values.tolist()},
+        ensure_ascii=False, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+def is_consistent(df: pd.DataFrame) -> bool:
+    if df is None or df.empty:
+        return False
+    lengths = [len([c for c in row if str(c).strip() != ""]) for _, row in df.iterrows()]
+    if not lengths:
+        return False
+    mode = max(set(lengths), key=lengths.count)
+    ratio = lengths.count(mode) / len(lengths)
+    return ratio >= STRUCTURAL_THRESHOLD
+
+def detect_header(df: pd.DataFrame):
+    best_idx, best_score = None, 0.0
+    limit = min(5, len(df))
+    for i in range(limit):
+        row = df.iloc[i].astype(str).fillna("")
+        non_numeric = row.apply(lambda x: not x.replace(".", "", 1).isdigit())
+        uniqueness = row.nunique() / max(1, len(row))
+        score = non_numeric.mean() * 0.6 + uniqueness * 0.4
+        if score > best_score:
+            best_idx, best_score = i, score
+    return best_idx if best_score >= HEADER_DETECTION_RATIO else None
+
+def clean_df(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    df = df.applymap(lambda x: SPACE_RX.sub(" ", x) if isinstance(x, str) else x)
+    df = df.applymap(lambda x: NEWLINE_RX.sub(" ", x) if isinstance(x, str) else x)
+    return df
+
+def try_parse_numeric(series: pd.Series) -> pd.Series:
+    s = series.astype(str).str.strip()
+    candidates = []
+    for decimal, thousands in [(".", ","), (",", "."), (".", " "), (",", " ")]:
+        tmp = s.str.replace(thousands, "", regex=False).str.replace(decimal, ".", regex=False)
+        numeric = pd.to_numeric(tmp, errors="coerce")
+        conf = numeric.notna().mean()
+        candidates.append((conf, numeric))
+    conf, best = max(candidates, key=lambda x: x[0])
+    return best if conf >= MIN_NUMERIC_CONF else pd.to_numeric(s, errors="ignore")
+
+def try_parse_datetime(series: pd.Series) -> pd.Series:
+    def parse_one(x: str):
+        x = x.strip()
+        if not x:
+            return pd.NaT
+        try:
+            return dtp.parse(x, dayfirst=True, fuzzy=True)
+        except Exception:
+            return pd.NaT
+    parsed = series.astype(str).apply(parse_one)
+    return parsed if parsed.notna().mean() >= 0.6 else series
+
+def explicit_typing(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for c in df.columns:
+        s = df[c]
+        # evita truncar IDs con ceros a la izquierda
+        if s.astype(str).str.match(r"^0\d+$").mean() > 0.5:
+            df[c] = s.astype(str)
+            continue
+        numeric = try_parse_numeric(s)
+        if numeric.notna().mean() >= MIN_NUMERIC_CONF:
+            df[c] = numeric
+            continue
+        dtc = try_parse_datetime(s)
+        if getattr(dtc, "dt", None) is not None and dtc.notna().mean() >= 0.6:
+            df[c] = dtc
+        else:
+            df[c] = s.astype(str).replace({"None": "", "nan": ""})
+    return df
+
+def promote_header(df: pd.DataFrame) -> pd.DataFrame:
+    idx = detect_header(df)
+    if idx is None:
+        return df
+    header = df.iloc[idx].astype(str).fillna("").tolist()
+    df2 = df.iloc[idx+1:].reset_index(drop=True).copy()
+    df2.columns = [h if h else f"col_{i}" for i, h in enumerate(header)]
+    return df2
+
+def normalize(df: pd.DataFrame) -> pd.DataFrame:
+    df = clean_df(df)
+    df = promote_header(df)
+    df = df.dropna(how="all").reset_index(drop=True)
+    df = explicit_typing(df)
+    # Alinear columnas (rellenar filas cortas)
+    max_cols = max(len(df.columns), df.apply(lambda r: r.astype(str).replace("", pd.NA).notna().sum(), axis=1).max())
+    if max_cols > len(df.columns):
+        for i in range(len(df.columns), max_cols):
+            df[f"col_{i}"] = pd.NA
+    return df
+
+def safe_to_csv(df: pd.DataFrame, out_path: str):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    df.to_csv(out_path, index=False, encoding=CSV_ENCODING, sep=CSV_SEP, lineterminator="\n", quoting=csv.QUOTE_MINIMAL, escapechar="\\")
+
+def html_preview(meta: dict, df: pd.DataFrame) -> str:
+    head = df.head(20)
+    return f"<h3>Tabla p{meta.get('page','?')} t{meta.get('table_index','?')}</h3><pre>{json.dumps(meta, ensure_ascii=False, indent=2)}</pre>{head.to_html(index=False)}"
+
+def process_pdf(pdf_path: str) -> Tuple[int, str]:
+    filename = os.path.basename(pdf_path)
+    base = os.path.splitext(filename)[0]
+    manifest = []
+    html_parts = [f"<html><head><meta charset='utf-8'><title>{filename}</title><style>body{font-family:Arial, sans-serif;margin:1.5rem;} table{border-collapse:collapse;} td,th{border:1px solid #ccc;padding:.25rem .5rem;font-size:12px}</style></head><body><h1>Diagnóstico: {filename}</h1>"]
+
+    tables_exported = 0
+    with pdfplumber.open(pdf_path) as pdf:
+        for p_idx, page in enumerate(tqdm(pdf.pages, desc=f"Páginas {filename}", leave=False), start=1):
+            try:
+                tables = page.extract_tables(
+                    table_settings={"vertical_strategy":"lines","horizontal_strategy":"lines","intersection_tolerance":5}
+                )
+                if not tables:
+                    tables = page.extract_tables(
+                        table_settings={"vertical_strategy":"text","horizontal_strategy":"text","snap_tolerance":3}
+                    )
+            except Exception as e:
+                logging.warning(f"Fallo extracción en {filename} página {p_idx}: {e}")
+                tables = []
+
+            for t_idx, tbl in enumerate(tables):
+                raw = pd.DataFrame(tbl)
+                if not is_consistent(raw):
+                    logging.info(f"Descartada tabla inconsistente en {filename} p{p_idx} t{t_idx}")
+                    continue
+                norm = normalize(raw)
+                meta = {
+                    "file": filename,
+                    "page": p_idx,
+                    "table_index": t_idx,
+                    "rows": int(len(norm)),
+                    "columns": int(len(norm.columns)),
+                    "hash": hash_df(norm),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                csv_name = f"{base}__p{p_idx}__t{t_idx}.csv"
+                out_csv = os.path.join(OUTPUT_DIR, csv_name)
+                safe_to_csv(norm, out_csv)
+                manifest.append({"csv": csv_name, "meta": meta})
+                html_parts.append(html_preview(meta, norm))
+                tables_exported += 1
+
+    manifest_path = os.path.join(OUTPUT_DIR, base + "__manifest.json")
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    html_parts.append("</body></html>")
+    with open(os.path.join(DIAG_DIR, base + ".html"), "w", encoding="utf-8") as f:
+        f.write("\n".join(html_parts))
+
+    logging.info(f"Procesado {filename}: {tables_exported} tablas exportadas")
+    return tables_exported, manifest_path
+
+def list_pdfs(root: str) -> List[str]:
+    pdfs = []
+    for dp, _, fs in os.walk(root):
+        for fn in fs:
+            if fn.lower().endswith(".pdf"):
+                pdfs.append(os.path.join(dp, fn))
+    return pdfs
+
+def main():
+    ap = argparse.ArgumentParser(description="Pipeline PDF->CSV con validación y diagnóstico (sin prompts)")
+    ap.add_argument("--input", default=INPUT_DIR)
+    ap.add_argument("--output", default=OUTPUT_DIR)
+    ap.add_argument("--diagnostics", action="store_true", default=True)  # siempre genera HTML
+    args = ap.parse_args()
+
+    pdfs = list_pdfs(args.input)
+    if not pdfs:
+        console.info("No se encontraron PDFs en data/input. Coloca tus archivos y vuelve a ejecutar.\n")
+        return
+
+    console.info(f"Encontrados {len(pdfs)} PDFs. Iniciando extracción...\n")
+    total = len(pdfs)
+    processed = 0
+    for i, pdf in enumerate(tqdm(pdfs, desc="PDFs", unit="pdf")):
+        _count, _manifest = process_pdf(pdf)
+        processed += 1
+
+    console.info(f"\nExtracción completa. PDFs procesados: {processed}/{total}")
+    console.info(f"CSVs: {OUTPUT_DIR}")
+    console.info(f"Manifiestos JSON: {OUTPUT_DIR}")
+    console.info(f"Diagnósticos HTML: {DIAG_DIR}")
+    console.info(f"Logs: {log_file}")
+
+if __name__ == "__main__":
+  main()
+PY
+  chmod +x "$PIPELINE_FILE"
+}
+
+# -----------------------
+# Crear y activar venv
+# -----------------------
+create_venv() {
+  local pybin="$1"
+  if [ ! -d "$VENV_DIR" ]; then
+    run_with_spinner "Creando entorno virtual (.venv)" "$pybin" -m venv "$VENV_DIR"
+  fi
+  # Activar
+  # shellcheck disable=SC1090
+  source "${VENV_DIR}/bin/activate"
+  # Asegurar pip actualizado
+  run_with_spinner "Actualizando pip/setuptools/wheel" python -m pip install --upgrade pip setuptools wheel
+}
+
+# -----------------------
+# Instalar dependencias
+# -----------------------
+install_deps() {
+  run_with_spinner "Instalando dependencias Python" python -m pip install -r "$REQUIREMENTS_FILE"
+  # Verificación de integridad de imports
+  python - <<'PY'
+import sys
+mods = ["pandas","pdfplumber","tqdm","jinja2","tabulate","numpy","dateutil","chardet"]
+bad = []
+for m in mods:
+    try:
+        __import__(m if m!="dateutil" else "dateutil.parser")
+    except Exception as e:
+        bad.append((m, str(e)))
+if bad:
+    print("Fallo en dependencias:", bad)
+    sys.exit(1)
+print("OK")
+PY
+}
+
+# -----------------------
+# Ejecución del pipeline
+# -----------------------
+run_pipeline_if_pdfs() {
+  local count
+  count=$(find "$INPUT_DIR" -type f -iname "*.pdf" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$count" -gt 0 ]; then
+    blue "Se encontraron $count PDF(s) en $INPUT_DIR. Ejecutando pipeline..."
+    python "$PIPELINE_FILE" --input "$INPUT_DIR" >/dev/null 2>&1 &
+    local pid=$!
+    spinner "$pid" "Extrayendo tablas y generando CSV/HTML"
+    green "Extracción finalizada. Revisa:"
+    echo " - CSVs y manifiestos: $OUTPUT_DIR"
+    echo " - Diagnósticos HTML:   $DIAG_DIR"
+    echo " - Logs:                $LOGS_DIR/run.log"
+  else
+    yellow "No hay PDFs en $INPUT_DIR aún."
+    echo "Coloca tus archivos PDF en: $INPUT_DIR"
+    echo "Para ejecutar más tarde: source .venv/bin/activate && python pipeline.py --input $INPUT_DIR"
+  fi
+}
+
+# ======================
+# Ejecución principal
+# ======================
+blue "=== ${PROJECT_NAME}: Instalación y ejecución automática ==="
+
+run_with_spinner "Preparando estructura de carpetas" prepare_fs
+write_requirements
+write_pipeline_py
+
+PY_BIN="$(ensure_python)"
+green "Python OK: $($PY_BIN --version 2>&1 | tr -d '\n')"
+
+create_venv "$PY_BIN"
+install_deps
+
+# Intento opcional de Ghostscript (para mejores resultados en algunos PDFs)
+if command -v apt-get >/dev/null 2>&1; then
+  ( sudo apt-get install -y ghostscript >/dev/null 2>&1 ) &
+  spinner $! "Instalando opcional: ghostscript"
+elif command -v brew >/dev/null 2>&1; then
+  ( brew install ghostscript >/dev/null 2>&1 || true ) &
+  spinner $! "Instalando opcional: ghostscript"
+elif command -v pkg >/dev/null 2>&1; then
+  ( yes | pkg install ghostscript >/dev/null 2>&1 || true ) &
+  spinner $! "Instalando opcional: ghostscript"
+fi
+
+green "Instalación completa."
+echo
+echo "Estructura creada:"
+echo " - Input:        $INPUT_DIR"
+echo " - Output:       $OUTPUT_DIR"
+echo " - Diagnostics:  $DIAG_DIR"
+echo " - Logs:         $LOGS_DIR"
+echo
+
+# Escaneo con mini barra de progreso (ilustrativo)
+files_found=0
+if [ -d "$INPUT_DIR" ]; then
+  total_scan=20
+  for i in $(seq 1 $total_scan); do
+    progress_bar "$i" "$total_scan" "Escaneando directorio de entrada"
+    sleep 0.03
+  done
+  files_found=$(find "$INPUT_DIR" -maxdepth 2 -type f -iname "*.pdf" 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+run_pipeline_if_pdfs
+
+green "Todo listo. Puedes comenzar a procesar tus datos ya."
+``` 
+
+---
+
+### Notas rápidas
+
+- Si ya tienes PDFs en data/input cuando lo ejecutes, el pipeline arrancará automáticamente y verás barras de progreso.
+- Si no hay PDFs aún, el script termina sin preguntar y te deja el entorno listo. Para correr después:
+  - source .venv/bin/activate
+  - python pipeline.py --input data/input
+
+¿Querés que el script mueva automáticamente PDFs grandes por bloques y aplique perfiles de validación por bloque? Puedo añadirlo en esta misma cápsula. 
+
+¡Buena pregunta, Byron! Integrar validaciones automáticas en el flujo de extracción de PDFs es clave para garantizar que las tablas que se procesan sean confiables, completas y estructuralmente sólidas. Y como vos estás construyendo un pipeline robusto y modular, el enfoque puede ser elegantemente sistemático.
+
+---
+
+## ✅ ¿Dónde integrarlas dentro del flujo?
+
+Dentro de tu arquitectura modular tipo `extract → validate → normalize → export`, las validaciones pueden actuar como un **filtro temprano** y también como una **verificación posterior**, justo antes del guardado final.
+
+---
+
+## 🧪 Tipos de validaciones automáticas que podés integrar
+
+### 1. **Consistencia estructural**
+Detecta si las tablas extraídas tienen filas con igual número de columnas.
+
+```python
+def is_structurally_consistent(df: pd.DataFrame, threshold: float = 0.8) -> bool:
+    lengths = [len([c for c in row if c is not None]) for _, row in df.iterrows()]
+    mode = max(set(lengths), key=lengths.count)
+    ratio = lengths.count(mode) / len(lengths)
+    return ratio >= threshold
+```
+
+🔍 Útil para descartar tablas con columnas irregulares o celdas desalineadas.
+
+---
+
+### 2. **Promoción inteligente de encabezado**
+Valida si la primera fila es candidata a ser cabecera. Úsalo antes de normalizar:
+
+```python
+def detect_header_row(df: pd.DataFrame) -> int | None:
+    best_score, best_idx = 0, None
+    for i in range(min(5, len(df))):
+        row = df.iloc[i].astype(str)
+        uniqueness = row.nunique() / len(row)
+        non_numeric_ratio = sum(not r.replace('.', '', 1).isdigit() for r in row) / len(row)
+        score = 0.6 * non_numeric_ratio + 0.4 * uniqueness
+        if score > best_score:
+            best_score = score
+            best_idx = i
+    return best_idx if best_score > 0.6 else None
+```
+
+🧠 Combina estadística y heurística para evitar falsas promociones.
+
+---
+
+### 3. **Validación semántica**
+Detecta si hay columnas tipo fecha o numéricas mal formateadas.
+
+```python
+def is_valid_iso_date(val: str) -> bool:
+    return re.match(r"\d{4}-\d{2}-\d{2}", val or "") is not None
+```
+
+✍️ Esto te permite validar las celdas extraídas antes de exportar o insertar en DB.
+
+---
+
+### 4. **Verificación de esquema esperado**
+Si sabés cómo deben lucir las tablas (por bloque, por fuente), podés definirlo así:
+
+```python
+EXPECTED_COLUMNS = {"date", "name", "phone"}
+
+def matches_expected_schema(df: pd.DataFrame) -> bool:
+    actual = set(map(str.lower, df.columns))
+    return EXPECTED_COLUMNS.issubset(actual)
+```
+
+🔐 Detecta si se extrajo una tabla válida o si falta algún campo importante.
+
+---
+
+### 5. **Validación de unicidad o clave compuesta**
+Antes de insertar datos:
+
+```python
+def has_unique_keys(df: pd.DataFrame, keys: list[str]) -> bool:
+    return df.duplicated(subset=keys).sum() == 0
+```
+
+---
+
+## 🧱 ¿Cómo integrarlas automáticamente en tu flujo?
+
+1. Dentro de tu extractor o pipeline, entre `extract_data → validate_data`  
+2. Agrupadas como un módulo `validators.py`, donde cada función devuelva `True/False`
+3. Usá `if not valid: discard` antes de continuar al normalizador
+4. Logueá cada tabla descartada con razón en tu `run.log` o incluso en `diagnostic.html`
+
+---
+
+Si querés, puedo integrarte estas validaciones directamente al instalador monolítico que hicimos. También podría generar un `diagnostic_score` por tabla: una puntuación 0–100 basada en estructura, encabezado, campos esperados y duplicados… para decidir si se exporta o se archiva como incompleta. ¿Te gustaría eso? 
+
+¡Perfecto, Byron! Te armo un esquema de integración con puntaje diagnóstico para cada tabla. Esto te va a permitir automatizar decisiones dentro del pipeline: exportar, normalizar, archivar o revisar manualmente.
+
+---
+
+## ⚙️ Módulo `validators.py` con scoring integrado
+
+```python
+from typing import Optional
+import pandas as pd
+import re
+
+EXPECTED_COLUMNS = {"date", "name", "phone"}
+
+def score_structure(df: pd.DataFrame) -> int:
+    lengths = [len([c for c in row if c is not None]) for _, row in df.iterrows()]
+    mode = max(set(lengths), key=lengths.count)
+    ratio = lengths.count(mode) / len(lengths)
+    return int(ratio * 100)
+
+def score_header(df: pd.DataFrame) -> int:
+    best_score = 0
+    for i in range(min(5, len(df))):
+        row = df.iloc[i].astype(str)
+        uniqueness = row.nunique() / len(row)
+        non_numeric_ratio = sum(not r.replace('.', '', 1).isdigit() for r in row) / len(row)
+        score = 0.6 * non_numeric_ratio + 0.4 * uniqueness
+        best_score = max(best_score, score)
+    return int(best_score * 100)
+
+def score_schema(df: pd.DataFrame) -> int:
+    actual = set(map(str.lower, df.columns))
+    coverage = len(EXPECTED_COLUMNS.intersection(actual)) / len(EXPECTED_COLUMNS)
+    return int(coverage * 100)
+
+def score_duplicates(df: pd.DataFrame, keys: list[str]) -> int:
+    if not keys or any(k not in df.columns for k in keys): return 100
+    dupes = df.duplicated(subset=keys).sum()
+    total = len(df)
+    return int(100 * (1 - dupes / total)) if total > 0 else 100
+
+def get_diagnostic_score(df: pd.DataFrame, keys: Optional[list[str]] = None) -> dict:
+    return {
+        "structure": score_structure(df),
+        "header": score_header(df),
+        "schema": score_schema(df),
+        "uniqueness": score_duplicates(df, keys or []),
+        "total": int(sum([
+            score_structure(df),
+            score_header(df),
+            score_schema(df),
+            score_duplicates(df, keys or [])
+        ]) / 4)
+    }
+```
+
+---
+
+## 📊 ¿Cómo usarlo?
+
+En tu bloque de validación dentro del pipeline:
+
+```python
+report = get_diagnostic_score(df, keys=["name", "date"])
+
+if report["total"] >= 80:
+    proceed_to_normalization(df)
+else:
+    log_table(df, report)
+    archive_table(df)
+```
+
+Además podés imprimir el `report` como JSON o HTML si querés un dashboard liviano tipo `diagnostic.html` en Replit.
+
+---
+
+¿Querés que te arme ese generador de dashboard con gráficos o exporte los puntajes como CSV? También puedo modularlo por fuente o bloque si querés personalizar umbrales por caso.

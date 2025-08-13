@@ -99,6 +99,28 @@
                         Haz preguntas sobre los datos extraídos
                     </div>
                 </div>
+                <!-- Input de archivo oculto -->
+                <input type="file" id="chat-file-input" class="hidden" accept=".pdf">
+                
+                <!-- Indicador de archivo adjunto -->
+                <div id="file-indicator" class="mb-3 hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center">
+                        <span id="file-name" class="text-sm text-blue-700">Archivo adjunto</span>
+                        <button type="button" class="text-blue-500 hover:text-blue-700" onclick="clearAttachedFile()">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mb-2">
+                    <button id="attach-file-btn" class="bg-gray-500 text-white px-3 py-2 rounded-lg hover:bg-gray-600 text-sm">
+                        <i data-lucide="paperclip"></i> PDF
+                    </button>
+                    <button id="download-chat-btn" class="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 text-sm">
+                        <i data-lucide="download"></i> Historial
+                    </button>
+                </div>
+                
                 <div class="flex gap-2">
                     <input type="text" id="chat-input" placeholder="Escribe tu pregunta..." 
                         class="flex-1 px-3 py-2 border rounded-md">
@@ -359,40 +381,110 @@
     }
 
     // Chat functionality
-    document.getElementById('chat-send').addEventListener('click', sendMessage);
+    let attachedFile = null;
+    
+    // Check if elements exist before adding listeners
+    const chatSendBtn = document.getElementById('chat-send');
+    if (chatSendBtn) chatSendBtn.addEventListener('click', sendMessage);
     document.getElementById('chat-input').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
+    
+    // File attachment functionality
+    document.getElementById('attach-file-btn').addEventListener('click', () => {
+        document.getElementById('chat-file-input').click();
+    });
+    
+    document.getElementById('chat-file-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            attachedFile = file;
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-indicator').classList.remove('hidden');
+        }
+    });
+    
+    document.getElementById('download-chat-btn').addEventListener('click', downloadChatHistory);
+    
+    function clearAttachedFile() {
+        attachedFile = null;
+        document.getElementById('chat-file-input').value = '';
+        document.getElementById('file-indicator').classList.add('hidden');
+    }
+    
+    async function downloadChatHistory() {
+        try {
+            const response = await fetch('/api/export-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: chatHistory })
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'historial_chat.txt';
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } else {
+                addChatMessage('Error al exportar historial', 'error');
+            }
+        } catch (error) {
+            addChatMessage('Error: ' + error.message, 'error');
+        }
+    }
 
     async function sendMessage() {
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
-        if (!message) return;
+        if (!message && !attachedFile) return;
         
         // Add user message to chat
-        addChatMessage(message, 'user');
+        if (message) addChatMessage(message, 'user');
+        if (attachedFile) addChatMessage(`📎 Archivo adjunto: ${attachedFile.name}`, 'user');
+        
         input.value = '';
         
-        // Add to history
-        chatHistory.push({ role: 'user', parts: [message] });
-        
-        // Send to API
         try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ prompt: message, history: chatHistory })
-            });
+            let response, result;
             
-            const result = await response.json();
+            if (attachedFile) {
+                // Send file with question to chat-file endpoint
+                const formData = new FormData();
+                formData.append('file', attachedFile);
+                formData.append('question', message || 'Analiza este PDF y extrae la información relevante.');
+                
+                response = await fetch('/api/chat-file', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                result = await response.json();
+                clearAttachedFile();
+            } else {
+                // Regular chat message
+                chatHistory.push({ role: 'user', parts: [message] });
+                
+                response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: message, history: chatHistory })
+                });
+                
+                result = await response.json();
+                
+                if (response.ok) {
+                    chatHistory.push({ role: 'model', parts: [result.response] });
+                }
+            }
             
             if (!response.ok) throw new Error(result.error);
             
             // Add AI response to chat
             addChatMessage(result.response, 'ai');
             
-            // Add to history
-            chatHistory.push({ role: 'model', parts: [result.response] });
         } catch (error) {
             addChatMessage('Error: ' + error.message, 'error');
         }

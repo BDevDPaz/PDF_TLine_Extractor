@@ -1,6 +1,6 @@
 # Overview
 
-This is an AI-powered PDF data extraction and analysis application built with Flask that uses Google's Gemini AI to intelligently process telecommunications billing PDFs. The system extracts call logs, message history, and data usage information using advanced AI with JSON Schema validation. It features a mobile-style interface with navigation tabs, interactive data visualization, and an AI chat assistant that can answer questions about extracted data. The application uses SQLite for data persistence and provides comprehensive analysis tools.
+This is an advanced AI-powered PDF data extraction and analysis application built with Flask that combines multiple extraction methods for optimal accuracy. The system uses enhanced regex patterns (based on proven telecommunications bill processors) as the primary extraction method, with Google's Gemini AI as intelligent fallback. It processes telecommunications billing PDFs to extract call logs, message history, and data usage information. The application features a mobile-style interface with navigation tabs, interactive data visualization, an AI chat assistant with direct PDF upload capability, and comprehensive analysis tools. Uses SQLite for data persistence with transaction-based integrity management.
 
 # User Preferences
 
@@ -32,18 +32,24 @@ The frontend is organized into five tab-based sections:
 - **Werkzeug** for secure file upload handling
 - Session-based security with configurable secret keys
 
-### Optimized AI-Powered Data Processing Pipeline
-The system implements a comprehensive PDF processing workflow that handles all selected pages in a single operation:
+### Advanced Multi-Layer Data Processing Pipeline
+The system implements a sophisticated PDF processing workflow with multiple extraction methods:
 
 1. **File Upload Handler**: Secures uploaded PDFs in the `data` directory
-2. **Optimized Processor Module**: Processes all selected pages simultaneously with intelligent content optimization
-3. **Comprehensive Data Extraction**: 
-   - Primary: AI analyzes complete document content with smart summarization to avoid timeouts
-   - Secondary: Comprehensive regex patterns covering all pages when AI extraction is insufficient
-   - Extracts call records, message logs, and data usage with full temporal context
-4. **Chat Assistant**: AI-powered conversational interface for querying extracted data
-5. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
-6. **Complete Page Coverage**: Processes all user-selected pages in one operation while maintaining efficiency
+2. **Enhanced Regex Processor**: Advanced pattern-based extractor using proven telecommunications bill parsing patterns
+   - Specific regex patterns for T-Mobile bill formats
+   - State-persistent processing tracking sections, lines, and dates
+   - Handles TALK, TEXT, and DATA sections with precise field extraction
+3. **Hybrid AI Processor**: AI-powered fallback when regex patterns are insufficient
+   - Smart content optimization to avoid API timeouts
+   - JSON schema validation for structured data extraction
+4. **Intelligent Processing Strategy**: 
+   - Primary: Enhanced regex processor for maximum accuracy and speed
+   - Fallback: AI hybrid processor when regex yields insufficient results
+   - Automatic selection of best results between both methods
+5. **Direct Chat File Analysis**: Users can upload PDFs directly to chat for immediate AI analysis
+6. **Chat History Export**: Full conversation history download functionality
+7. **Data Integrity Management**: Transaction-based processing with automatic rollback on errors
 
 ### Database Design
 Uses **SQLite** with SQLAlchemy ORM featuring a unified data model:
@@ -65,6 +71,8 @@ RESTful endpoints provide JSON data for the frontend:
 - `/api/get-data` - Complete dataset retrieval
 - `/api/export-csv` - CSV export functionality
 - `/api/chat` - AI chat assistant endpoint for Q&A
+- `/api/chat-file` - Direct PDF file upload and analysis in chat
+- `/api/export-chat` - Chat history export functionality
 
 ## External Dependencies
 
