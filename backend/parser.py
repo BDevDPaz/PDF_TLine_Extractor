@@ -252,44 +252,87 @@ class PDFParser:
     def _extract_tmobile_usage_details(self, text):
         """Estrategia 5: Extracción especializada para T-Mobile Usage Details"""
         try:
-            # Procesar solo páginas con USAGE DETAILS
+            total_pages = len(self.doc)
+            logging.info(f"📄 PDF total: {total_pages} páginas")
+            
+            # Seguir especificaciones del usuario: omitir 3 primeras y 2 últimas páginas
+            start_page = 3  # Comenzar en página 4 (índice 3)
+            end_page = total_pages - 2  # Omitir 2 últimas páginas
+            
+            if start_page >= end_page:
+                logging.warning("⚠️ Muy pocas páginas para procesar según especificaciones")
+                return
+                
+            logging.info(f"📊 Procesando páginas {start_page + 1} a {end_page} según especificaciones del usuario")
+            
+            # Extraer fecha del año de la página 4 (índice 3)
+            base_year = 2024  # Default
+            if total_pages > 3:
+                page_4_text = self.doc[3].get_text("text")
+                year_match = re.search(r'\b(20\d{2})\b', page_4_text)
+                if year_match:
+                    base_year = int(year_match.group(1))
+                    logging.info(f"📅 Año base detectado en página 4: {base_year}")
+            
+            # Procesar páginas optimizado para evitar timeouts
             pages_text = []
-            for page_num in range(len(self.doc)):
-                page_text = self.doc[page_num].get_text("text")
-                if "USAGE DETAILS" in page_text or any(keyword in page_text for keyword in ["TALK", "IN (", "OUT (", "Jul ", "Aug "]):
-                    pages_text.append(page_text)
-                    # Limitar a las primeras 10 páginas relevantes para evitar timeout
-                    if len(pages_text) >= 10:
-                        break
+            for page_num in range(start_page, min(start_page + 8, end_page)):  # Limitar a 8 páginas para evitar timeout
+                try:
+                    page_text = self.doc[page_num].get_text("text")
+                    if "USAGE DETAILS" in page_text or any(keyword in page_text for keyword in ["TALK", "IN (", "OUT (", "Jul ", "Aug ", "TEXT", "DATA"]):
+                        pages_text.append(page_text)
+                        logging.info(f"📄 Página {page_num + 1} contiene datos de eventos")
+                except Exception as e:
+                    logging.warning(f"⚠️ Error procesando página {page_num + 1}: {e}")
             
             if not pages_text:
+                logging.warning("⚠️ No se encontraron páginas con USAGE DETAILS")
                 return
                 
             combined_text = "\n".join(pages_text)
             lines = combined_text.strip().split('\n')
             current_line_number = None
             current_date = None
+            current_year = base_year
             
-            # Buscar líneas telefónicas en el texto combinado
+            # Buscar líneas telefónicas específicas en encabezados de sección
+            detected_lines = {}
             for i, line in enumerate(lines):
-                if re.match(r'\(\d{3}\)\s*\d{3}-\d{4}', line.strip()):
-                    phone_match = re.search(r'\((\d{3})\)\s*(\d{3})-(\d{4})', line)
-                    if phone_match:
-                        phone_number = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
-                        existing_line = self.session.query(Line).filter_by(phone_number=phone_number).first()
-                        if not existing_line:
-                            new_line = Line(phone_number=phone_number)
-                            self.session.add(new_line)
-                            self.session.flush()
-                            current_line_number = new_line
-                        else:
-                            current_line_number = existing_line
-                        logging.info(f"📱 LÍNEA T-MOBILE DETECTADA: {phone_number}")
-                        break
+                line_clean = line.strip()
+                
+                # Detectar líneas telefónicas como encabezados de sección
+                phone_header_match = re.match(r'^\((\d{3})\)\s*(\d{3})-(\d{4})(?:\s|$)', line_clean)
+                if phone_header_match:
+                    phone_number = f"({phone_header_match.group(1)}) {phone_header_match.group(2)}-{phone_header_match.group(3)}"
+                    
+                    # Verificar si es un encabezado de sección (línea siguiente contiene fecha o "TALK")
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        if "TALK" in next_line or re.search(r'(Jul|Aug|Sep|Oct|Nov|Dec|Jan|Feb|Mar|Apr|May|Jun)\s+\d{1,2}', next_line):
+                            existing_line = self.session.query(Line).filter_by(phone_number=phone_number).first()
+                            if not existing_line:
+                                new_line = Line(phone_number=phone_number)
+                                self.session.add(new_line)
+                                self.session.flush()
+                                detected_lines[phone_number] = new_line
+                            else:
+                                detected_lines[phone_number] = existing_line
+                            logging.info(f"📱 LÍNEA T-MOBILE DETECTADA: {phone_number}")
+                            
+            if not detected_lines:
+                logging.warning("⚠️ No se detectaron líneas telefónicas válidas")
+                return
             
             # Procesar eventos de llamadas en formato T-Mobile
             for i, line in enumerate(lines):
                 line = line.strip()
+                
+                # Detectar cambio de línea telefónica actual
+                for phone_number, line_obj in detected_lines.items():
+                    if line.startswith(phone_number):
+                        current_line_number = line_obj
+                        logging.info(f"📱 Procesando eventos para línea: {phone_number}")
+                        break
                 
                 # Detectar nueva fecha (formato: Jul 17, Jul 18, etc.)
                 date_match = re.match(r'(Jul|Aug|Sep|Oct|Nov|Dec|Jan|Feb|Mar|Apr|May|Jun)\s+(\d{1,2})', line)
@@ -297,7 +340,8 @@ class PDFParser:
                     month_str = date_match.group(1)
                     day = int(date_match.group(2))
                     month = MONTH_MAP.get(month_str, 7)
-                    current_date = datetime(2024, month, day)  # Asumir 2024
+                    current_date = datetime(current_year, month, day)
+                    logging.info(f"📅 Nueva fecha detectada: {current_date.strftime('%Y-%m-%d')}")
                     continue
                 
                 # Detectar eventos de llamadas

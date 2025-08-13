@@ -25,6 +25,20 @@ This is a production-ready AI-powered PDF document analysis application speciali
 - **User Experience Priority**: Show data insights immediately, not processing explanations
 - **Conversation Flexibility**: Allow open discussion on PDF processing, data extraction, CSV generation, tabular formats, and chronological data organization without rigid conversational restrictions
 
+## PDF Processing Specifications (August 2025)
+- **Page Processing Rule**: Skip first 3 pages and last 2 pages of all PDFs
+- **Start Processing**: Always begin from page 4 (index 3)
+- **Year Extraction**: Extract year from page 4 for all date processing
+- **Document Structure**: Each page has 2 columns of data
+- **Reference Colors** (for understanding format):
+  - Yellow: Page numbers and line-by-line extraction targets
+  - Orange: Date markers
+  - Red: Phone line associations for events
+  - Brown: Event type indicators
+  - Green: Event information headers
+  - Light Blue: Line continuation indicators
+- **Multi-file Processing**: Each PDF contains different events and dates - system must be flexible
+
 # System Architecture
 
 ## Frontend Architecture (React/Vite - August 2025)
