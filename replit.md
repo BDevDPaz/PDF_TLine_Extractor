@@ -1,15 +1,16 @@
 # Overview
 
-This is an AI-first document analysis application that automatically processes PDF files and presents data through intelligent visualizations. Built with Flask and powered by Google Gemini AI, the system eliminates manual processing steps by automatically extracting, analyzing, and visualizing data as soon as a PDF is uploaded. The application focuses on immediate visual insights with interactive dashboards, smart analytics, and an AI assistant for data queries. Features include automatic data extraction, real-time dashboard generation, intelligent filtering, CSV export capabilities, and conversational data analysis. The interface prioritizes data visualization over manual processing workflows.
+This is an AI-first document analysis application that automatically processes PDF files and presents data through intelligent visualizations. Built with Flask and powered by Google Gemini AI, the system eliminates manual processing steps by automatically extracting, analyzing, and visualizing data as soon as a PDF is uploaded. The application focuses on immediate visual insights with interactive dashboards, smart analytics, and an AI assistant for flexible data queries. Features include automatic data extraction, real-time dashboard generation, intelligent filtering, CSV export capabilities, tabular data conversion, chronological organization, and conversational analysis covering all aspects of PDF processing and data structuring. The interface prioritizes data visualization over manual processing workflows while supporting comprehensive discussion about document processing methodologies.
 
 # User Preferences
 
-- **Preferred communication style**: Simple, everyday language
+- **Preferred communication style**: Simple, everyday language with flexible conversation topics
 - **Privacy Priority**: Complete privacy protection - user data must be processed discretely without developer visibility
 - **Quality over Sophistication**: Extraction accuracy more important than AI complexity
 - **Workflow Requirements**: AI-driven automatic processing - eliminate redundant manual steps
 - **Interface Requirements**: Focus on data visualization and interactive analytics over manual processing
 - **User Experience Priority**: Show data insights immediately, not processing explanations
+- **Conversation Flexibility**: Allow open discussion on PDF processing, data extraction, CSV generation, tabular formats, and chronological data organization without rigid conversational restrictions
 
 # System Architecture
 
