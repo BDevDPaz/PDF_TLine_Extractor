@@ -344,14 +344,40 @@ class PDFParser:
                     logging.info(f"📅 Nueva fecha detectada: {current_date.strftime('%Y-%m-%d')}")
                     continue
                 
-                # Detectar eventos de llamadas en formato T-Mobile específico
-                # Formato 1: Jul 17           10:15 AM    IN (818) 466-3558   Incoming           F          2       -
-                # Formato 2:                  11:05 AM   OUT (818) 466-3558   to Canogapark/CA   F          1       -
-                # Buscar eventos específicos del formato T-Mobile real
-                # Ejemplo: "Jul 17           10:15 AM    IN (818) 466-3558   Incoming           F          2       -"
-                # Ejemplo: "                 11:05 AM   OUT (818) 466-3558   to Canogapark/CA   F          1       -"
-                call_match = re.search(r'(\d{1,2}:\d{2}\s+[AP]M)\s+(IN|OUT)\s+\((\d{3})\)\s*(\d{3}-\d{4})\s+(.+?)\s+([AF-])\s+(\d+)', line)
-                if call_match and current_line_number and current_date:
+                # Detectar eventos en formato T-Mobile multi-línea basado en análisis real del PDF
+                # Formato: Hora en una línea, luego dirección+número, descripción, tipo, duración en líneas separadas
+                time_match = re.match(r'^(\d{1,2}:\d{2}\s+[AP]M)$', line.strip())
+                if time_match and current_line_number and current_date and i + 4 < len(lines):
+                    time_str = time_match.group(1)
+                    
+                    # Buscar dirección en las siguientes líneas
+                    for j in range(1, min(6, len(lines) - i)):
+                        next_line = lines[i + j].strip()
+                        direction_match = re.match(r'^(IN|OUT)\s+\((\d{3})\)\s*(\d{3}-\d{4})$', next_line)
+                        
+                        if direction_match and i + j + 3 < len(lines):
+                            direction = direction_match.group(1)
+                            area_code = direction_match.group(2)
+                            phone_number = direction_match.group(3)
+                            contact_number = f"({area_code}) {phone_number}"
+                            
+                            description = lines[i + j + 1].strip()
+                            event_type = lines[i + j + 2].strip()
+                            
+                            # Procesar evento de llamada si tiene duración numérica
+                            try:
+                                duration_line = lines[i + j + 3].strip()
+                                if duration_line.isdigit():
+                                    duration = int(duration_line)
+                                    self._create_call_event(time_str, direction, contact_number, description, duration, current_line_number, current_date)
+                                    break
+                            except:
+                                pass
+                            
+                            # Procesar evento de texto si contiene TXT
+                            if 'TXT' in description or event_type == 'TXT':
+                                self._create_text_event(time_str, direction, contact_number, description, current_line_number, current_date)
+                                break
                     try:
                         time_str = call_match.group(1)
                         direction = call_match.group(2)
@@ -396,6 +422,92 @@ class PDFParser:
                         
                     except Exception as e:
                         logging.debug(f"⚠️ Error procesando llamada T-Mobile: {line} | {e}")
+                        
+                # Procesar eventos TEXT (mensajes)
+                elif text_match and current_line_number and current_date:
+                    try:
+                        time_str = text_match.group(1)
+                        direction = text_match.group(2)
+                        
+                        # Extraer número - puede ser formato (818) 518-8406 o código internacional
+                        if text_match.group(3) and text_match.group(4):  # Formato (XXX) XXX-XXXX
+                            contact_number = f"({text_match.group(3)}) {text_match.group(4)}"
+                        else:  # Código internacional
+                            contact_number = text_match.group(5) if text_match.group(5) else "Unknown"
+                        
+                        destination = text_match.group(6).strip()
+                        
+                        # Crear timestamp
+                        hour, minute_period = time_str.split(':')
+                        minute, period = minute_period.split()
+                        hour = int(hour)
+                        minute = int(minute)
+                        if period.upper() == 'PM' and hour != 12:
+                            hour += 12
+                        elif period.upper() == 'AM' and hour == 12:
+                            hour = 0
+                        
+                        timestamp = current_date.replace(hour=hour, minute=minute)
+                        
+                        # Crear evento de texto
+                        text_event = TextEvent(
+                            line_id=current_line_number.id,
+                            timestamp=timestamp,
+                            counterpart_number=contact_number,
+                            destination=destination,
+                            message_type=direction
+                        )
+                        self.session.add(text_event)
+                        self.total_extracted += 1
+                        self.extraction_stats['texts'] += 1
+                        logging.info(f"💬 T-MOBILE TEXTO: {direction} {contact_number} - {destination}")
+                        
+                    except Exception as e:
+                        logging.debug(f"⚠️ Error procesando texto T-Mobile: {line} | {e}")
+                        
+                # Procesar eventos DATA
+                elif data_match and current_line_number and current_date:
+                    try:
+                        time_str = data_match.group(1)
+                        description = data_match.group(2).strip()
+                        amount = float(data_match.group(3))
+                        unit = data_match.group(4)
+                        
+                        # Convertir a MB
+                        if unit == 'KB':
+                            amount_mb = amount / 1024
+                        elif unit == 'GB':
+                            amount_mb = amount * 1024
+                        else:  # MB
+                            amount_mb = amount
+                        
+                        # Crear timestamp
+                        hour, minute_period = time_str.split(':')
+                        minute, period = minute_period.split()
+                        hour = int(hour)
+                        minute = int(minute)
+                        if period.upper() == 'PM' and hour != 12:
+                            hour += 12
+                        elif period.upper() == 'AM' and hour == 12:
+                            hour = 0
+                        
+                        timestamp = current_date.replace(hour=hour, minute=minute)
+                        
+                        # Crear evento de datos
+                        data_event = DataEvent(
+                            line_id=current_line_number.id,
+                            timestamp=timestamp,
+                            data_type="Usage",
+                            amount_mb=amount_mb,
+                            description=description
+                        )
+                        self.session.add(data_event)
+                        self.total_extracted += 1
+                        self.extraction_stats['data'] += 1
+                        logging.info(f"📊 T-MOBILE DATOS: {amount_mb:.2f}MB - {description}")
+                        
+                    except Exception as e:
+                        logging.debug(f"⚠️ Error procesando datos T-Mobile: {line} | {e}")
                         
         except Exception as e:
             logging.error(f"❌ Error en extracción T-Mobile: {e}")

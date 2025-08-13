@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
-from parser import PDFParser
+from parser_clean import TMobileParser
 import ai_enrichment
 import json
 from datetime import date, datetime
@@ -47,8 +47,18 @@ def upload_file():
     
     try:
         logging.info(f"🔄 PROCESANDO PDF: {filename}")
-        parser = PDFParser(filepath)
-        parser.run_extraction()
+        # Usar el nuevo parser optimizado T-Mobile
+        session = SessionLocal()
+        try:
+            parser = TMobileParser(session)
+            stats = parser.parse_pdf(filepath)
+            session.commit()
+            logging.info(f"✅ PROCESAMIENTO COMPLETADO: {stats}")
+        except Exception as e:
+            session.rollback()
+            logging.error(f"❌ Error en procesamiento: {e}")
+        finally:
+            session.close()
         
         # Ejecutar enriquecimiento de IA automáticamente
         logging.info("🤖 Iniciando categorización IA automática")

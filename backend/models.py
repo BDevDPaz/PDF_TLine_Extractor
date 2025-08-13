@@ -42,8 +42,10 @@ class DataEvent(Base):
     __tablename__ = 'data_events'
     id = Column(Integer, primary_key=True)
     line_id = Column(Integer, ForeignKey('lines.id'), nullable=False)
-    date = Column(Date, nullable=False)
-    usage_mb = Column(Float)
+    timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    data_type = Column(String)
+    amount_mb = Column(Float)
+    description = Column(String)
 
     line = relationship("Line", back_populates="data_events")
 
