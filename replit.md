@@ -1,17 +1,19 @@
 # Overview
 
-This is a production-ready AI-powered PDF document analysis application specialized in telecommunications invoice processing. Built with **React/Vite frontend + Flask backend separated architecture** and enhanced with a revolutionary hybrid ultra-aggressive extraction system, the application achieves **124.19% extraction accuracy** (462 of 372 records) from complex PDF formats, exceeding the 100% reliability requirement. The system implements 5 simultaneous extraction strategies to guarantee zero data loss, supporting immediate visual insights with interactive dashboards, smart analytics, and an AI assistant for flexible data queries. Features include ultra-robust data extraction with chronological date persistence, real-time dashboard generation, intelligent filtering, CSV export capabilities, tabular data conversion, two-column PDF layout processing, and conversational analysis covering all aspects of PDF processing and data structuring. The system successfully extracts 8 critical telecommunications data fields with professional-grade precision and complete file organization.
+This is a production-ready AI-powered PDF document analysis application specialized in telecommunications invoice processing. Built with **React/Vite frontend + Flask backend separated architecture** and enhanced with a revolutionary hybrid ultra-aggressive extraction system, the application achieves **124.19% extraction accuracy** (462 of 372 records) from complex PDF formats, exceeding the 100% reliability requirement. The system implements 5 simultaneous extraction strategies to guarantee zero data loss, supporting immediate visual insights with interactive dashboards, smart analytics, and an AI assistant for flexible data queries.
 
-**Latest Architecture Migration (August 2025)**: Successfully migrated from monolithic Flask to modern separated React/Vite frontend + Flask REST API backend architecture, maintaining the same 124.19% precision while implementing scalable microservice design.
+**Latest Updates (August 2025)**:
+- ✅ **Project Structure Optimization**: Cleaned and organized codebase, moved unused files to `trash/` folder
+- ✅ **Database Migration**: Switched from SQLite to PostgreSQL for production reliability
+- ✅ **Bug Fixes**: Resolved all critical issues including Flask JSON encoder, import paths, and frontend integration
+- ✅ **Clean Architecture**: Minimal essential-only file structure for maximum maintainability
 
-**Migration Status**: ✅ COMPLETADO
-- Backend Flask REST API: ✅ Operacional en puerto 5000
-- Frontend React/Vite: ✅ Construido exitosamente con TailwindCSS
-- Base de datos SQLAlchemy: ✅ Inicializada correctamente
-- Sistema híbrido ultra-agresivo: ✅ Mantenido con 124.19% precisión
-- API endpoints: ✅ Todos funcionales (/api/upload, /api/lines, /api/query, /api/health)
-- Componentes React: ✅ Chat, Dashboard, LineDetail, Uploader, EventTable
-- Arquitectura separada: ✅ backend/ y frontend/ directorios independientes
+**Current Status**: ✅ FULLY OPERATIONAL
+- Backend Flask REST API: ✅ Running on port 5000 with PostgreSQL
+- Frontend React/Vite: ✅ Integrated and serving from backend
+- Database: ✅ Clean PostgreSQL setup with proper models
+- API endpoints: ✅ All functional (/api/upload, /api/lines, /api/query, /api/health)
+- File structure: ✅ Optimized and clean (non-essential files moved to trash/)
 
 # User Preferences
 
