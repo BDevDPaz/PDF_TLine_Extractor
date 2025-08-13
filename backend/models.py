@@ -48,7 +48,8 @@ class DataEvent(Base):
     line = relationship("Line", back_populates="data_events")
 
 # --- Configuración de la Base de Datos ---
-DATABASE_URL = "sqlite:///database.db"
+import os
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///database.db")
 engine = create_engine(DATABASE_URL, echo=False)  # Sin echo para producción
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
