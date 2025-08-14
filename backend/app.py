@@ -27,7 +27,9 @@ except ImportError as e:
         def categorize_phone_numbers(self): pass
     ai_enrichment = DummyAI()
 
-class CustomJSONEncoder(json.JSONEncoder):
+from flask.json.provider import DefaultJSONProvider
+
+class CustomJSONProvider(DefaultJSONProvider):
     def default(self, o):
         if isinstance(o, (datetime, date)):
             return o.isoformat()
@@ -35,7 +37,7 @@ class CustomJSONEncoder(json.JSONEncoder):
 
 # --- Inicialización de la App ---
 app = Flask(__name__)
-app.json_encoder = CustomJSONEncoder
+app.json = CustomJSONProvider(app)
 CORS(app) # Permitir peticiones desde el frontend de Vite
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

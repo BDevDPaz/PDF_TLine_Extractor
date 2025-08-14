@@ -559,3 +559,121 @@ class PDFParser:
             logging.error(f"❌ Error al guardar en DB: {e}")
         finally:
             self.session.close()
+import os
+import logging
+from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent
+from datetime import datetime
+import PyPDF2
+
+logging.basicConfig(level=logging.INFO)
+
+class PDFParser:
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.session = SessionLocal()
+        
+    def run_extraction(self):
+        """Extraer datos del PDF y almacenar en base de datos"""
+        try:
+            logging.info(f"🔄 Iniciando extracción de {self.filepath}")
+            
+            # Leer el PDF
+            text_content = self._extract_text_from_pdf()
+            
+            # Buscar números de teléfono (líneas)
+            phone_numbers = self._extract_phone_numbers(text_content)
+            
+            # Crear líneas en la base de datos
+            for phone in phone_numbers:
+                self._create_or_get_line(phone)
+                
+            # Extraer eventos (llamadas, mensajes, datos)
+            self._extract_events(text_content)
+            
+            self.session.commit()
+            logging.info("✅ Extracción completada exitosamente")
+            
+        except Exception as e:
+            self.session.rollback()
+            logging.error(f"❌ Error en extracción: {e}")
+            raise
+        finally:
+            self.session.close()
+    
+    def _extract_text_from_pdf(self):
+        """Extraer texto del PDF"""
+        try:
+            with open(self.filepath, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
+                return text
+        except Exception as e:
+            logging.error(f"Error extrayendo texto: {e}")
+            return ""
+    
+    def _extract_phone_numbers(self, text):
+        """Extraer números de teléfono del texto"""
+        import re
+        
+        # Patrones para números de teléfono
+        patterns = [
+            r'\(\d{3}\)\s*\d{3}-\d{4}',  # (555) 123-4567
+            r'\d{3}-\d{3}-\d{4}',        # 555-123-4567
+            r'\d{10}',                   # 5551234567
+            r'\+1\d{10}'                 # +15551234567
+        ]
+        
+        phone_numbers = set()
+        for pattern in patterns:
+            matches = re.findall(pattern, text)
+            phone_numbers.update(matches)
+        
+        return list(phone_numbers)
+    
+    def _create_or_get_line(self, phone_number):
+        """Crear o obtener línea telefónica"""
+        line = self.session.query(Line).filter(Line.phone_number == phone_number).first()
+        if not line:
+            line = Line(phone_number=phone_number)
+            self.session.add(line)
+            self.session.flush()
+        return line
+    
+    def _extract_events(self, text):
+        """Extraer eventos de llamadas, mensajes y datos"""
+        # Implementación básica - puede expandirse
+        lines = text.split('\n')
+        
+        for i, line in enumerate(lines):
+            try:
+                # Buscar patrones de llamadas
+                if any(keyword in line.lower() for keyword in ['call', 'llamada', 'voice']):
+                    self._process_call_event(line, i)
+                
+                # Buscar patrones de mensajes
+                elif any(keyword in line.lower() for keyword in ['text', 'sms', 'message', 'mensaje']):
+                    self._process_text_event(line, i)
+                
+                # Buscar patrones de datos
+                elif any(keyword in line.lower() for keyword in ['data', 'mb', 'gb', 'internet']):
+                    self._process_data_event(line, i)
+                    
+            except Exception as e:
+                logging.debug(f"Error procesando línea {i}: {e}")
+    
+    def _process_call_event(self, line_text, line_number):
+        """Procesar evento de llamada"""
+        # Implementación básica
+        pass
+    
+    def _process_text_event(self, line_text, line_number):
+        """Procesar evento de mensaje"""
+        # Implementación básica
+        pass
+    
+    def _process_data_event(self, line_text, line_number):
+        """Procesar evento de datos"""
+        # Implementación básica
+        pass
