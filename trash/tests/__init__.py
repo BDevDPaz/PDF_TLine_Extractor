@@ -1,1 +1,0 @@
-# Tests package for PDF extraction system

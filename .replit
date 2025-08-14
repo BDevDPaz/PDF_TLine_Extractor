@@ -1,37 +1,16 @@
-modules = ["python-3.11", "nodejs-20", "postgresql-16", "python3"]
+# .replit
+# Especifica un canal estable de Nix para evitar inconsistencias
+channel = "stable-23.11"
 
-[nix]
-channel = "stable-25_05"
-packages = ["freetype", "glibcLocales", "gumbo", "harfbuzz", "jbig2dec", "libjpeg_turbo", "libxcrypt", "mupdf", "openjpeg", "openssl", "poetry", "postgresql", "swig", "xcbuild"]
+# El comando explícito que se ejecutará al presionar "Run".
+# Esto anula los Workflows y satisface el requisito de la consola.
+run = "sh start.sh"
 
-[deployment]
-deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+# Se ejecuta una vez al iniciar el Repl para asegurar que el entorno esté listo
+onBoot = "echo Entorno listo."
 
-[workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
-waitForPort = 5000
-
-[[ports]]
-localPort = 5000
-externalPort = 80
-
-[agent]
-integrations = ["python_gemini==1.0.0"]
+# Configuración del lenguaje para que Replit ofrezca herramientas adecuadas
+[languages.python]
+pattern = "**/*.py"
+[languages.javascript]
+pattern = "**/*.{js,jsx}"

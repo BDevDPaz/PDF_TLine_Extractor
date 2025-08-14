@@ -1,49 +1,32 @@
 import os
-import logging
-from flask import Flask, request, jsonify, send_from_directory, send_file
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
+import threading
 import json
 from datetime import date, datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
+from parser import PDFParser
+import ai_enrichment
 
-# Configurar logging del sistema
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.info("🚀 BACKEND: Sistema de Extracción 100% Confiable iniciado")
-logging.info("🔥 BACKEND: Híbrido Ultra-Agresivo con 5 estrategias simultáneas activas")
-logging.info("📊 BACKEND: Precisión garantizada 124.19% (supera objetivo 100%)")
-
-# Importaciones locales con manejo de errores
-try:
-    from models import SessionLocal, Line, CallEvent, TextEvent, DataEvent, init_db
-    from parser import PDFParser
-    import ai_enrichment
-    logging.info("✅ Módulos importados correctamente")
-except ImportError as e:
-    logging.error(f"❌ Error importando módulos: {e}")
-    logging.info("🔄 Continuando sin módulos opcionales...")
-    # Crear imports dummy para evitar errores
-    class DummyAI:
-        model = None
-        def categorize_phone_numbers(self): pass
-    ai_enrichment = DummyAI()
-
-from flask.json.provider import DefaultJSONProvider
-
-class CustomJSONProvider(DefaultJSONProvider):
-    def default(self, o):
-        if isinstance(o, (datetime, date)):
-            return o.isoformat()
-        return super().default(o)
+# Helper para convertir objetos SQLAlchemy a diccionarios
+def row2dict(row):
+    d = {}
+    for column in row.__table__.columns:
+        value = getattr(row, column.name)
+        if isinstance(value, (datetime, date)):
+            d[column.name] = value.isoformat()
+        else:
+            d[column.name] = value
+    return d
 
 # --- Inicialización de la App ---
 app = Flask(__name__)
-app.json = CustomJSONProvider(app)
-CORS(app) # Permitir peticiones desde el frontend de Vite
+CORS(app) # Permitir peticiones desde el frontend
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Inicializar la base de datos al arrancar
+# Crear las tablas de la base de datos si no existen
 init_db()
 
 # --- Endpoints de la API ---
@@ -52,37 +35,22 @@ def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No se encontró el archivo"}), 400
     file = request.files['file']
-    if file.filename == '' or file.filename is None:
+    if file.filename == '':
         return jsonify({"error": "No se seleccionó archivo"}), 400
     
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(filepath)
     
     try:
-        logging.info(f"🔄 PROCESANDO PDF: {filename}")
-        # Usar el parser PDFParser existente
-        try:
-            parser = PDFParser(filepath)
-            parser.run_extraction()
-            logging.info("✅ PROCESAMIENTO COMPLETADO")
-        except Exception as e:
-            logging.error(f"❌ Error en procesamiento: {e}")
-            # Continuar sin fallar completamente
-            pass
-        
-        # Ejecutar enriquecimiento de IA automáticamente si está disponible
-        try:
-            if hasattr(ai_enrichment, 'categorize_phone_numbers'):
-                logging.info("🤖 Iniciando categorización IA automática")
-                ai_enrichment.categorize_phone_numbers()
-        except Exception as e:
-            logging.warning(f"⚠️ IA no disponible: {e}")
-        
-        logging.info("✅ PROCESAMIENTO COMPLETADO con sistema híbrido ultra-agresivo")
-        return jsonify({"message": "Archivo procesado con éxito - Sistema Híbrido 124.19% precisión"}), 200
+        parser = PDFParser(filepath)
+        parser.run_extraction()
+        # Iniciar el enriquecimiento de IA en un hilo para no bloquear la respuesta
+        ai_thread = threading.Thread(target=ai_enrichment.categorize_phone_numbers)
+        ai_thread.start()
+        return jsonify({"message": "Archivo procesado. El enriquecimiento con IA se está ejecutando."}), 200
     except Exception as e:
-        logging.error(f"❌ ERROR procesando PDF: {str(e)}")
+        # Imprimir el error en la consola del backend para depuración
+        print(f"Error detallado al procesar el PDF: {e}")
         return jsonify({"error": f"Error al procesar el PDF: {str(e)}"}), 500
 
 @app.route('/api/lines', methods=['GET'])
@@ -96,145 +64,58 @@ def get_lines():
 @app.route('/api/lines/<int:line_id>/details', methods=['GET'])
 def get_line_details(line_id):
     session = SessionLocal()
-    line = session.query(Line).filter(Line.id == line_id).first()
+    line = session.query(Line).get(line_id)
     if not line:
-        session.close()
-        return jsonify({"error": "Línea no encontrada"}), 404
+        session.close(); return jsonify({"error": "Línea no encontrada"}), 404
     
+    # Usar el helper row2dict para una serialización segura a JSON
     details = {
-        "calls": [row.__dict__ for row in line.call_events],
-        "texts": [row.__dict__ for row in line.text_events],
-        "data": [row.__dict__ for row in line.data_events],
+        "calls": [row2dict(row) for row in line.call_events],
+        "texts": [row2dict(row) for row in line.text_events],
+        "data": [row2dict(row) for row in line.data_events],
     }
-    # Eliminar metadatos de SQLAlchemy antes de serializar
-    for event_type in details:
-        for event in details[event_type]:
-            event.pop('_sa_instance_state', None)
-
     session.close()
     return jsonify(details)
 
 @app.route('/api/query', methods=['POST'])
 def handle_query():
-    try:
-        if not hasattr(ai_enrichment, 'model') or not ai_enrichment.model:
-            return jsonify({"answer": "La IA no está configurada en el servidor. Configure GOOGLE_API_KEY en las variables de entorno."})
+    if not ai_enrichment.model:
+        return jsonify({"answer": "La IA no está configurada en el servidor."})
 
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No se recibieron datos JSON"}), 400
-            
-        user_question = data.get('question')
-        line_id = data.get('line_id')
+    data = request.get_json()
+    user_question = data.get('question')
+    line_id = data.get('line_id')
 
-        if not user_question or not line_id:
-            return jsonify({"error": "Faltan datos en la petición (question y line_id requeridos)"}), 400
+    if not user_question or not line_id:
+        return jsonify({"error": "Faltan datos en la petición"}), 400
+    
+    session = SessionLocal()
+    line = session.query(Line).get(line_id)
+    if not line:
+        session.close(); return jsonify({"error": "Línea no encontrada"}), 404
         
-        session = SessionLocal()
-        try:
-            line = session.query(Line).get(line_id)
-            if not line:
-                return jsonify({"error": "Línea no encontrada"}), 404
-                
-            # Crear un contexto de datos conciso
-            calls = line.call_events[:20] if line.call_events else []
-            texts = line.text_events[:10] if line.text_events else []
-            data_events = line.data_events[:10] if line.data_events else []
-            
-            data_context = f"Datos para la línea {line.phone_number}:\n"
-            
-            if calls:
-                data_context += "Llamadas recientes:\n"
-                for c in calls:
-                    try:
-                        category = getattr(c, 'ai_category', 'Sin categoría')
-                        timestamp_str = c.timestamp.strftime('%d-%b') if c.timestamp else 'Fecha no disponible'
-                        data_context += f"- Llamada a {c.counterpart_number} ({category}) el {timestamp_str} duró {c.duration_minutes} min.\n"
-                    except Exception:
-                        data_context += f"- Llamada a {c.counterpart_number}\n"
-            
-            if texts:
-                data_context += "Mensajes recientes:\n"
-                for t in texts:
-                    try:
-                        timestamp_str = t.timestamp.strftime('%d-%b') if t.timestamp else 'Fecha no disponible'
-                        data_context += f"- Mensaje con {t.counterpart_number} el {timestamp_str}\n"
-                    except Exception:
-                        data_context += f"- Mensaje con {t.counterpart_number}\n"
-            
-            if not calls and not texts and not data_events:
-                data_context += "No hay datos disponibles para esta línea.\n"
-            
-            prompt = f"""Eres un asistente experto en análisis de facturas telefónicas. Sé conciso y amable.
-            Basándote estrictamente en el siguiente contexto, responde la pregunta del usuario.
-            Si la respuesta no se encuentra en los datos, di "No tengo suficiente información sobre eso en los datos disponibles".
+    calls = line.call_events[:20]
+    data_context = f"Datos para la línea {line.phone_number}:\n"
+    data_context += "Llamadas recientes:\n"
+    data_context += "\n".join([f"- Llamada a {c.counterpart_number} ({c.ai_category}) el {c.timestamp.strftime('%d-%b')} duró {c.duration_minutes} min." for c in calls])
+    
+    prompt = f"""Eres un asistente experto en análisis de facturas. Sé conciso y amable.
+    Basándote estrictamente en el siguiente contexto, responde la pregunta del usuario.
+    Si la respuesta no se encuentra en los datos, di "No tengo suficiente información sobre eso en los datos recientes".
 
-            Contexto:
-            {data_context}
+    Contexto:
+    {data_context}
 
-            Pregunta del usuario: "{user_question}"
-            """
-            
-            try:
-                response = ai_enrichment.model.generate_content(prompt)
-                return jsonify({"answer": response.text})
-            except Exception as e:
-                return jsonify({"answer": f"Error al contactar la IA: {str(e)}"})
-        finally:
-            session.close()
+    Pregunta del usuario: "{user_question}"
+    """
+    
+    try:
+        response = ai_enrichment.model.generate_content(prompt)
+        session.close()
+        return jsonify({"answer": response.text})
     except Exception as e:
-        logging.error(f"❌ Error en endpoint query: {e}")
-        return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
-
-# Importar funciones para servir archivos estáticos
-
-@app.route('/')
-def serve_frontend():
-    """Servir la aplicación React"""
-    try:
-        return send_file('../frontend/dist/index.html')
-    except:
-        return jsonify({
-            "message": "Backend API funcionando correctamente",
-            "system": "Sistema Híbrido Ultra-Agresivo", 
-            "precision": "124.19%",
-            "note": "Frontend no encontrado, ejecute: cd frontend && npm run build",
-            "api_endpoints": {
-                "upload": "/api/upload",
-                "lines": "/api/lines",
-                "details": "/api/lines/<id>/details", 
-                "query": "/api/query"
-            }
-        })
-
-@app.route('/assets/<path:path>')
-def serve_static(path):
-    """Servir archivos estáticos del frontend"""
-    return send_from_directory('../frontend/dist/assets', path)
-
-@app.route('/vite.svg')
-def serve_vite_icon():
-    """Servir el icono de Vite"""
-    try:
-        return send_from_directory('../frontend/dist', 'vite.svg')
-    except:
-        return '', 404
-
-# Catch-all para React Router (SPA)
-@app.route('/<path:path>')
-def serve_spa(path):
-    """Servir SPA para todas las rutas que no sean API"""
-    if path.startswith('api/'):
-        return jsonify({"error": "API endpoint not found"}), 404
-    try:
-        return send_file('../frontend/dist/index.html')
-    except:
-        return jsonify({"error": "Frontend not built"}), 404
-
-@app.route('/api/health')
-def health_check():
-    """Endpoint de verificación de salud"""
-    return jsonify({"status": "healthy", "service": "backend-api"})
+        session.close()
+        return jsonify({"answer": f"Error al contactar la IA: {str(e)}"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
